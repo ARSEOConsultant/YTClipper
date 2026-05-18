@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YTClipper
 
-## Getting Started
+YTClipper is a simple, rights-aware YouTube media utility built with Next.js 14. It allows users to process YouTube videos they own, have permission to use, or that are licensed for reuse. 
 
-First, run the development server:
+This repository contains the MVP code, showcasing a clean, mobile-first design focused on user experience and SEO.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Setup Instructions
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Copy the environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `NEXT_PUBLIC_APP_URL`: The base URL of your application (e.g., http://localhost:3000)
+- `YOUTUBE_API_KEY`: Required if implementing the real YouTube Data API.
+- Storage/S3 and Redis variables are included as placeholders for future production enhancements.
 
-## Learn More
+## Mock Services
 
-To learn more about Next.js, take a look at the following resources:
+For this MVP, media processing (MP4, MP3) and transcript extraction rely on **mock service abstractions** located in `src/lib/services/`. This allows the application to be deployed on free infrastructure (like Vercel's free tier) without requiring a complex backend FFmpeg server setup. 
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+To replace mocks with real implementations:
+1. **YouTube Metadata**: Update `getVideoMetadata` in `youtubeService.ts` to use the official Google YouTube Data API or an open-source scraper like `ytdl-core`.
+2. **Media Processing**: Update `prepareMp4Download` and `extractMp3Audio` in `mediaService.ts` to enqueue a job to a real worker running `fluent-ffmpeg` or call a third-party API.
+3. **Transcripts**: Update `transcriptService.ts` to use a library like `youtube-transcript`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
+This app is ready to be deployed to Vercel:
+1. Push your code to GitHub.
+2. Import the project into Vercel.
+3. Add the required environment variables.
+4. Deploy!
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Compliance Warning
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> **WARNING**: Only download or process videos you own, have permission to use, or that are licensed for reuse. This tool does not support bypassing DRM, private access, paywalls, or platform restrictions. Ensure your use of this software complies with YouTube's Terms of Service and local copyright laws.

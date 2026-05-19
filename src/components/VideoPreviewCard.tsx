@@ -11,7 +11,7 @@ export default function VideoPreviewCard({ metadata }: VideoPreviewCardProps) {
   return (
     <Card className="w-full max-w-3xl mx-auto overflow-hidden bg-white/50 backdrop-blur-sm border-zinc-100 shadow-xl shadow-zinc-200/40 rounded-2xl transition-all duration-500 animate-in fade-in slide-in-from-bottom-4">
       <div className="flex flex-col sm:flex-row">
-        <div className="relative w-full sm:w-64 aspect-video sm:aspect-auto sm:h-full bg-zinc-100 flex-shrink-0">
+        <div className="relative w-full sm:w-64 aspect-video bg-zinc-100 flex-shrink-0">
           {metadata.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -39,9 +39,22 @@ export default function VideoPreviewCard({ metadata }: VideoPreviewCardProps) {
           <h3 className="font-semibold text-lg line-clamp-2 leading-tight text-zinc-900 mb-2">
             {metadata.title}
           </h3>
-          <div className="flex items-center text-zinc-500 text-sm mb-4">
-            <User className="w-4 h-4 mr-1.5" />
-            <span className="truncate">{metadata.channelTitle}</span>
+          <div className="flex flex-col text-zinc-500 text-sm mb-4">
+            <div className="flex items-center">
+              <User className="w-4 h-4 mr-1.5" />
+              {metadata.channelUrl ? (
+                <a href={metadata.channelUrl} target="_blank" rel="noopener noreferrer" className="truncate hover:text-blue-600 hover:underline transition-colors">
+                  {metadata.channelTitle}
+                </a>
+              ) : (
+                <span className="truncate">{metadata.channelTitle}</span>
+              )}
+            </div>
+            {metadata.description && (
+              <p className="text-zinc-500 text-xs line-clamp-2 mt-2 italic leading-relaxed">
+                {metadata.description}
+              </p>
+            )}
           </div>
         </div>
       </div>

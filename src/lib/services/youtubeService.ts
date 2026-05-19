@@ -1,12 +1,23 @@
-import ytdl from '@distube/ytdl-core';
+// @ts-ignore
+import ytdl from 'ytdl-core-enhanced';
+
+export interface FormatOption {
+  itag: number;
+  label: string;
+  type: 'video' | 'audio';
+  quality: string;
+}
 
 export interface VideoMetadata {
   id: string;
   title: string;
   channelTitle: string;
+  channelUrl?: string;
+  description?: string;
   thumbnailUrl: string;
   duration: string; // e.g., "10:35"
   type: 'video' | 'shorts';
+  availableFormats: FormatOption[];
 }
 
 /**
@@ -59,7 +70,7 @@ export async function getVideoMetadata(url: string): Promise<VideoMetadata | nul
   if (!parsed) return null;
 
   try {
-    const info = await ytdl.getBasicInfo(url);
+    const info = await ytdl.getInfo(url);
     const videoDetails = info.videoDetails;
 
     // Format duration from seconds to MM:SS or HH:MM:SS
@@ -79,13 +90,67 @@ export async function getVideoMetadata(url: string): Promise<VideoMetadata | nul
     const thumbnails = videoDetails.thumbnails || [];
     const bestThumbnail = thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : '';
 
+    // Extract Formats
+    const availableFormats: FormatOption[] = [];
+    
+    // De-duplicate video formats by height (resolution)
+    // Prioritize formats that have both video and audio
+    const videoFormatsMap = new Map<number, any>();
+    if (info.formats && Array.isArray(info.formats)) {
+      info.formats.forEach((f: any) => {
+        if (f.hasVideo && f.height) {
+          const existing = videoFormatsMap.get(f.height);
+          if (!existing || (f.hasAudio && !existing.hasAudio)) {
+            videoFormatsMap.set(f.height, f);
+          }
+        }
+      });
+    }
+
+    const sortedVideoFormats = Array.from(videoFormatsMap.values())
+      .sort((a: any, b: any) => (b.height || 0) - (a.height || 0));
+      
+    sortedVideoFormats.forEach((f: any) => {
+      if (f.itag && f.height) {
+        let qualityName = 'SD';
+        if (f.height >= 1080) qualityName = 'FHD';
+        else if (f.height >= 720) qualityName = 'HD';
+        
+        availableFormats.push({
+          itag: f.itag,
+          label: `MP4 - (${f.height}p ${qualityName})`,
+          type: 'video',
+          quality: `${f.height}p`,
+        });
+      }
+    });
+
+    // Sort audio-only formats by bitrate
+    const audioFormats = (info.formats || [])
+      .filter((f: any) => !f.hasVideo && f.hasAudio)
+      .sort((a: any, b: any) => (b.audioBitrate || 0) - (a.audioBitrate || 0));
+      
+    audioFormats.forEach((f: any) => {
+      if (f.itag && f.audioBitrate) {
+        availableFormats.push({
+          itag: f.itag,
+          label: `Audio - ${f.audioBitrate}kbps (${f.container || 'webm'})`,
+          type: 'audio',
+          quality: `${f.audioBitrate}kbps`,
+        });
+      }
+    });
+
     return {
       id: videoDetails.videoId,
       title: videoDetails.title,
       channelTitle: videoDetails.author.name,
+      channelUrl: videoDetails.author.channel_url,
+      description: videoDetails.description ? videoDetails.description.slice(0, 150) + (videoDetails.description.length > 150 ? '...' : '') : undefined,
       thumbnailUrl: bestThumbnail,
       duration,
       type: parsed.type,
+      availableFormats,
     };
   } catch (error) {
     console.error('Error fetching metadata:', error);

@@ -62,7 +62,15 @@ export default function ToolLandingPageTemplate({
       
       // If default format exists and format selection is hidden, process immediately
       if (defaultFormat && hideFormatSelection) {
-        handleFormatSelect(defaultFormat, submittedUrl);
+        if (defaultFormat === 'transcript') {
+          handleTranscriptDownload(submittedUrl);
+        } else if (metaData.availableFormats && metaData.availableFormats.length > 0) {
+          // Find first matching format type if possible
+          const match = metaData.availableFormats.find((f: any) => 
+            defaultFormat === 'mp3' ? f.type === 'audio' : f.type === 'video'
+          );
+          handleMediaDownload(match ? match.itag : metaData.availableFormats[0].itag, submittedUrl);
+        }
       }
       
     } catch (err: any) {
@@ -72,34 +80,22 @@ export default function ToolLandingPageTemplate({
     }
   };
 
-  const handleFormatSelect = async (format: 'mp4' | 'mp3' | 'transcript', targetUrl: string = url) => {
+  const handleMediaDownload = async (itag: number, targetUrl: string = url) => {
     setIsProcessing(true);
-    setProcessingMessage(`Preparing your ${format.toUpperCase()}...`);
+    setProcessingMessage('Starting download process...');
 
     try {
-      const res = await fetch(`/api/${format === 'transcript' ? 'transcript' : `download/${format}`}`, {
+      const res = await fetch(`/api/job/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl, quality: '1080p' }),
+        body: JSON.stringify({ url: targetUrl, itag }),
       });
 
       if (!res.ok) throw new Error((await res.json()).error || 'Processing failed');
       const data = await res.json();
 
-      if (format === 'transcript') {
-        // Handle text download
-        const blob = new Blob([data.text], { type: 'text/plain;charset=utf-8' });
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `transcript_${targetUrl.split('v=')[1] || 'video'}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(downloadUrl);
-        toast.success('Transcript downloaded successfully');
-      } else {
-        // Handle media download (mock URL)
+      if (!data.requiresJob) {
+        // Direct download
         const a = document.createElement('a');
         a.href = data.downloadUrl;
         a.download = data.filename;
@@ -107,8 +103,77 @@ export default function ToolLandingPageTemplate({
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        toast.success(`${format.toUpperCase()} download started`);
+        toast.success('Download started');
+        setIsProcessing(false);
+        return;
       }
+
+      // Needs Job Processing - Start Polling
+      setProcessingMessage('Processing High-Quality Video (This may take a minute)...');
+      const jobId = data.jobId;
+      
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/job/status?jobId=${jobId}`);
+          if (!statusRes.ok) throw new Error('Failed to check status');
+          
+          const statusData = await statusRes.json();
+          
+          if (statusData.status === 'completed') {
+            clearInterval(pollInterval);
+            
+            // Trigger final download
+            const a = document.createElement('a');
+            a.href = `/api/download/file?jobId=${jobId}`;
+            a.download = statusData.filename;
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            toast.success('Processing complete! Download starting.');
+            setIsProcessing(false);
+          } else if (statusData.status === 'error') {
+            clearInterval(pollInterval);
+            toast.error(statusData.error || 'Processing failed.');
+            setIsProcessing(false);
+          }
+        } catch (pollErr) {
+          console.error(pollErr);
+        }
+      }, 2000);
+
+    } catch (err: any) {
+      toast.error(err.message || 'An error occurred during processing');
+      setIsProcessing(false);
+    }
+  };
+
+  const handleTranscriptDownload = async (targetUrl: string = url) => {
+    setIsProcessing(true);
+    setProcessingMessage('Extracting captions...');
+
+    try {
+      const res = await fetch(`/api/transcript`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: targetUrl }),
+      });
+
+      if (!res.ok) throw new Error((await res.json()).error || 'Processing failed');
+      const data = await res.json();
+
+      const blob = new Blob([data.text], { type: 'text/plain;charset=utf-8' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `transcript_${targetUrl.split('v=')[1] || 'video'}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('Transcript downloaded successfully');
+      
     } catch (err: any) {
       toast.error(err.message || 'An error occurred during processing');
     } finally {
@@ -149,7 +214,9 @@ export default function ToolLandingPageTemplate({
                 ) : (
                   !hideFormatSelection && (
                     <FormatOptions 
-                      onSelect={(fmt) => handleFormatSelect(fmt, url)} 
+                      formats={metadata.availableFormats}
+                      onDownloadMedia={(itag) => handleMediaDownload(itag, url)} 
+                      onDownloadTranscript={() => handleTranscriptDownload(url)}
                       isLoading={isProcessing} 
                     />
                   )

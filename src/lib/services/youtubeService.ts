@@ -1,5 +1,7 @@
-// @ts-ignore
-import ytdl from 'ytdl-core-enhanced';
+import { ytdl, getYtdlOptions } from './ytdlAgent';
+import { getVideoInfoDirect } from './directInnerTube';
+import { parseYouTubeUrl } from './youtubeUrlParser';
+import { getVideoInfoViaYtdlp } from './ytdlpService';
 
 export interface FormatOption {
   itag: number;
@@ -20,140 +22,227 @@ export interface VideoMetadata {
   availableFormats: FormatOption[];
 }
 
-/**
- * Parses a YouTube URL and returns the video ID and type.
- */
-export function parseYouTubeUrl(url: string): { id: string; type: 'video' | 'shorts' } | null {
-  try {
-    const parsedUrl = new URL(url);
-    const hostname = parsedUrl.hostname.replace('www.', '');
-
-    // Handle youtu.be/<id>
-    if (hostname === 'youtu.be') {
-      const id = parsedUrl.pathname.slice(1);
-      return id ? { id, type: 'video' } : null;
-    }
-
-    // Handle youtube.com
-    if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
-      // Handle shorts
-      if (parsedUrl.pathname.startsWith('/shorts/')) {
-        const id = parsedUrl.pathname.split('/')[2];
-        return id ? { id, type: 'shorts' } : null;
-      }
-
-      // Handle standard watch URLs
-      if (parsedUrl.pathname === '/watch') {
-        const id = parsedUrl.searchParams.get('v');
-        return id ? { id, type: 'video' } : null;
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
+export { parseYouTubeUrl, validateYouTubeUrl } from './youtubeUrlParser';
 
 /**
- * Validates if the provided string is a valid YouTube URL.
- */
-export function validateYouTubeUrl(url: string): boolean {
-  return parseYouTubeUrl(url) !== null;
-}
-
-/**
- * Fetches video metadata using ytdl-core.
+ * Fetches video metadata.
+ * Attempt 1: yt-dlp (android_vr client — reliable for all videos)
+ * Attempt 2: ytdl-core-enhanced (node.js library, fallback)
  */
 export async function getVideoMetadata(url: string): Promise<VideoMetadata | null> {
   const parsed = parseYouTubeUrl(url);
   if (!parsed) return null;
 
+  // ── Attempt 1: yt-dlp via python3 subprocess ──
   try {
-    const info = await ytdl.getInfo(url);
-    const videoDetails = info.videoDetails;
-
-    // Format duration from seconds to MM:SS or HH:MM:SS
-    const totalSeconds = parseInt(videoDetails.lengthSeconds, 10);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    
-    let duration = '';
-    if (hours > 0) {
-      duration += `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    } else {
-      duration += `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const ytdlpData = await getVideoInfoViaYtdlp(url);
+    if (ytdlpData && ytdlpData.formats?.length > 0) {
+      console.log(`[META] yt-dlp returned ${ytdlpData.formats.length} formats`);
+      const meta = buildMetadataFromYtdlp(parsed, ytdlpData);
+      if (meta.availableFormats.length > 0) return meta;
     }
+  } catch (e: any) {
+    console.warn('[META] yt-dlp failed:', e.message);
+  }
 
-    // Get best thumbnail
-    const thumbnails = videoDetails.thumbnails || [];
-    const bestThumbnail = thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : '';
-
-    // Extract Formats
-    const availableFormats: FormatOption[] = [];
-    
-    // De-duplicate video formats by height (resolution)
-    // Prioritize formats that have both video and audio
-    const videoFormatsMap = new Map<number, any>();
-    if (info.formats && Array.isArray(info.formats)) {
-      info.formats.forEach((f: any) => {
-        if (f.hasVideo && f.height) {
-          const existing = videoFormatsMap.get(f.height);
-          if (!existing || (f.hasAudio && !existing.hasAudio)) {
-            videoFormatsMap.set(f.height, f);
-          }
-        }
-      });
+  // ── Attempt 2: Direct InnerTube client ──
+  try {
+    const directResult = await getVideoInfoDirect(parsed.id);
+    if (directResult && directResult.success && directResult.formats.length > 1) {
+      console.log(`[META] Direct InnerTube succeeded: ${directResult.formats.length} formats`);
+      return buildMetadata(parsed, directResult.videoDetails, directResult.formats);
     }
+  } catch (e: any) {
+    console.warn('[META] Direct InnerTube failed:', e.message);
+  }
 
-    const sortedVideoFormats = Array.from(videoFormatsMap.values())
-      .sort((a: any, b: any) => (b.height || 0) - (a.height || 0));
-      
-    sortedVideoFormats.forEach((f: any) => {
-      if (f.itag && f.height) {
-        let qualityName = 'SD';
-        if (f.height >= 1080) qualityName = 'FHD';
-        else if (f.height >= 720) qualityName = 'HD';
-        
-        availableFormats.push({
-          itag: f.itag,
-          label: `MP4 - (${f.height}p ${qualityName})`,
-          type: 'video',
-          quality: `${f.height}p`,
-        });
-      }
-    });
-
-    // Sort audio-only formats by bitrate
-    const audioFormats = (info.formats || [])
-      .filter((f: any) => !f.hasVideo && f.hasAudio)
-      .sort((a: any, b: any) => (b.audioBitrate || 0) - (a.audioBitrate || 0));
-      
-    audioFormats.forEach((f: any) => {
-      if (f.itag && f.audioBitrate) {
-        availableFormats.push({
-          itag: f.itag,
-          label: `Audio - ${f.audioBitrate}kbps (${f.container || 'webm'})`,
-          type: 'audio',
-          quality: `${f.audioBitrate}kbps`,
-        });
-      }
-    });
-
-    return {
-      id: videoDetails.videoId,
-      title: videoDetails.title,
-      channelTitle: videoDetails.author.name,
-      channelUrl: videoDetails.author.channel_url,
-      description: videoDetails.description ? videoDetails.description.slice(0, 150) + (videoDetails.description.length > 150 ? '...' : '') : undefined,
-      thumbnailUrl: bestThumbnail,
-      duration,
-      type: parsed.type,
-      availableFormats,
-    };
+  // ── Attempt 3: ytdl-core-enhanced ──
+  try {
+    const options = getYtdlOptions();
+    const info = await ytdl.getInfo(url, options);
+    console.log(`[META] ytdl-core-enhanced returned ${info.formats?.length ?? 0} formats`);
+    return buildMetadata(parsed, info.videoDetails, info.formats);
   } catch (error) {
-    console.error('Error fetching metadata:', error);
+    console.error('[META] All metadata sources failed');
     return null;
   }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function buildMetadataFromYtdlp(
+  parsed: { id: string; type: 'video' | 'shorts' },
+  data: any,
+): VideoMetadata {
+  const totalSeconds = Math.floor(data.duration || 0);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const duration = hours > 0
+    ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+    : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+  const MAX_VIDEO_HEIGHT = 1080;
+  const availableFormats: FormatOption[] = [];
+
+  const formats: any[] = data.formats || [];
+
+  // De-duplicate video formats by height — prefer mp4, then highest bitrate
+  const videoMap = new Map<number, any>();
+  for (const f of formats) {
+    const height: number = f.height;
+    const isVideo = f.vcodec && f.vcodec !== 'none';
+    if (!isVideo || !height || height > MAX_VIDEO_HEIGHT) continue;
+    const existing = videoMap.get(height);
+    const preferNew = !existing
+      || (f.ext === 'mp4' && existing.ext !== 'mp4')
+      || (f.ext === existing.ext && (f.vbr || f.tbr || 0) > (existing.vbr || existing.tbr || 0));
+    if (preferNew) videoMap.set(height, f);
+  }
+
+  Array.from(videoMap.values())
+    .sort((a, b) => (b.height || 0) - (a.height || 0))
+    .forEach(f => {
+      const itag = parseInt(f.format_id, 10);
+      if (!itag || isNaN(itag)) return;
+      let qualityName = 'SD';
+      if (f.height >= 1080) qualityName = 'FHD';
+      else if (f.height >= 720) qualityName = 'HD';
+      availableFormats.push({
+        itag,
+        label: `MP4 - (${f.height}p ${qualityName})`,
+        type: 'video',
+        quality: `${f.height}p`,
+      });
+    });
+
+  // Audio-only formats — deduplicate by bitrate bucket, prefer m4a
+  const audioMap = new Map<number, any>();
+  for (const f of formats) {
+    const isAudioOnly = f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none');
+    if (!isAudioOnly || !f.abr) continue;
+    const bucket = Math.round((f.abr as number) / 10) * 10;
+    const existing = audioMap.get(bucket);
+    if (!existing || (f.ext === 'm4a' && existing.ext !== 'm4a')) {
+      audioMap.set(bucket, f);
+    }
+  }
+
+  Array.from(audioMap.values())
+    .sort((a, b) => (b.abr || 0) - (a.abr || 0))
+    .forEach(f => {
+      const itag = parseInt(f.format_id, 10);
+      if (!itag || isNaN(itag)) return;
+      const kbps = Math.round(f.abr as number);
+      availableFormats.push({
+        itag,
+        label: `Audio - ${kbps}kbps (${f.ext || 'webm'})`,
+        type: 'audio',
+        quality: `${kbps}kbps`,
+      });
+    });
+
+  console.log(`[META] yt-dlp availableFormats: ${availableFormats.length}`, availableFormats.map(f => f.label));
+
+  return {
+    id: data.id || parsed.id,
+    title: data.title || '',
+    channelTitle: data.uploader || data.channel || 'Unknown',
+    channelUrl: data.channel_url || undefined,
+    description: data.description ? data.description.slice(0, 150) + (data.description.length > 150 ? '...' : '') : undefined,
+    thumbnailUrl: data.thumbnail || '',
+    duration,
+    type: parsed.type,
+    availableFormats,
+  };
+}
+
+function buildMetadata(
+  parsed: { id: string; type: 'video' | 'shorts' },
+  videoDetails: any,
+  formats: any[],
+): VideoMetadata {
+  // Format duration
+  const totalSeconds = parseInt(videoDetails.lengthSeconds, 10) || 0;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  let duration = '';
+  if (hours > 0) {
+    duration = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  } else {
+    duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  // Best thumbnail
+  const thumbnails = videoDetails.thumbnails || videoDetails.thumbnail?.thumbnails || [];
+  const bestThumbnail = thumbnails.length > 0 ? thumbnails[thumbnails.length - 1].url : '';
+
+  // Build format options
+  const availableFormats: FormatOption[] = [];
+
+  // De-duplicate video formats by height
+  const videoFormatsMap = new Map<number, any>();
+  for (const f of formats) {
+    if (f.hasVideo && f.height) {
+      const existing = videoFormatsMap.get(f.height);
+      if (!existing || (f.hasAudio && !existing.hasAudio)) {
+        videoFormatsMap.set(f.height, f);
+      }
+    }
+  }
+
+  const MAX_VIDEO_HEIGHT = 1080;
+
+  const sortedVideoFormats = Array.from(videoFormatsMap.values())
+    .sort((a: any, b: any) => (b.height || 0) - (a.height || 0));
+
+  for (const f of sortedVideoFormats) {
+    if (f.itag && f.height && f.height <= MAX_VIDEO_HEIGHT) {
+      let qualityName = 'SD';
+      if (f.height >= 1080) qualityName = 'FHD';
+      else if (f.height >= 720) qualityName = 'HD';
+
+      availableFormats.push({
+        itag: f.itag,
+        label: `MP4 - (${f.height}p ${qualityName})`,
+        type: 'video',
+        quality: `${f.height}p`,
+      });
+    }
+  }
+
+  // Audio-only formats
+  const audioFormats = formats
+    .filter((f: any) => !f.hasVideo && f.hasAudio)
+    .sort((a: any, b: any) => (b.audioBitrate || 0) - (a.audioBitrate || 0));
+
+  for (const f of audioFormats) {
+    if (f.itag && f.audioBitrate) {
+      availableFormats.push({
+        itag: f.itag,
+        label: `Audio - ${f.audioBitrate}kbps (${f.container || 'webm'})`,
+        type: 'audio',
+        quality: `${f.audioBitrate}kbps`,
+      });
+    }
+  }
+
+  console.log(`[META] Final availableFormats: ${availableFormats.length}`, availableFormats.map(f => f.label));
+
+  return {
+    id: videoDetails.videoId,
+    title: videoDetails.title,
+    channelTitle: videoDetails.author?.name || videoDetails.author || 'Unknown',
+    channelUrl: videoDetails.author?.channel_url || videoDetails.channelId ? `https://www.youtube.com/channel/${videoDetails.channelId}` : undefined,
+    description: videoDetails.shortDescription
+      ? videoDetails.shortDescription.slice(0, 150) + (videoDetails.shortDescription.length > 150 ? '...' : '')
+      : videoDetails.description
+        ? videoDetails.description.slice(0, 150) + (videoDetails.description.length > 150 ? '...' : '')
+        : undefined,
+    thumbnailUrl: bestThumbnail,
+    duration,
+    type: parsed.type,
+    availableFormats,
+  };
 }

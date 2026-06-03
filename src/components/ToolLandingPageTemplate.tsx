@@ -19,6 +19,7 @@ interface ToolLandingPageTemplateProps {
   faqs: { question: string; answer: string }[];
   defaultFormat?: 'mp4' | 'mp3' | 'transcript';
   hideFormatSelection?: boolean;
+  audioOnly?: boolean;
 }
 
 export default function ToolLandingPageTemplate({
@@ -28,6 +29,7 @@ export default function ToolLandingPageTemplate({
   faqs,
   defaultFormat,
   hideFormatSelection = false,
+  audioOnly = false,
 }: ToolLandingPageTemplateProps) {
   const [url, setUrl] = useState('');
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
@@ -213,8 +215,8 @@ export default function ToolLandingPageTemplate({
                   <ProcessingLoader message={processingMessage} />
                 ) : (
                   !hideFormatSelection && (
-                    <FormatOptions 
-                      formats={metadata.availableFormats}
+                    <FormatOptions
+                      formats={audioOnly ? metadata.availableFormats.filter(f => f.type === 'audio') : metadata.availableFormats}
                       onDownloadMedia={(itag) => handleMediaDownload(itag, url)} 
                       onDownloadTranscript={() => handleTranscriptDownload(url)}
                       isLoading={isProcessing} 

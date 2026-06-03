@@ -29,6 +29,7 @@ export default function YouTubeToMp3Page() {
       path="/youtube-to-mp3"
       faqs={faqs}
       defaultFormat="mp3"
+      audioOnly={true}
     />
   );
 }

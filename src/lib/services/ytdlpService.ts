@@ -48,8 +48,11 @@ export interface YtdlpFormat {
   acodec?: string;
   abr?: number;
   vbr?: number;
+  tbr?: number;
   url?: string;
   quality?: number;
+  filesize?: number;
+  filesize_approx?: number;
 }
 
 export interface YtdlpInfo {
@@ -91,6 +94,15 @@ export async function getDownloadUrlsViaYtdlp(url: string): Promise<YtdlpDownloa
     }));
 }
 
+// Run once per process on startup — keeps yt-dlp current without blocking requests
+if (typeof window === 'undefined') {
+  const upgradeProc = spawn('python3', ['-m', 'pip', 'install', '--upgrade', '--quiet', 'yt-dlp'], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  upgradeProc.unref();
+}
+
 export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | null> {
   const cookieFile = writeCookieFile();
 
@@ -102,6 +114,8 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
       '--no-download',
       '--no-warnings',
       '--quiet',
+      '--retries', '10',
+      '--fragment-retries', '10',
     ];
 
     if (cookieFile) args.push('--cookies', cookieFile);

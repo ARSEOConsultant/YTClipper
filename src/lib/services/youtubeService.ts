@@ -8,6 +8,7 @@ export interface FormatOption {
   label: string;
   type: 'video' | 'audio';
   quality: string;
+  fileSize?: string;
 }
 
 export interface VideoMetadata {
@@ -70,6 +71,12 @@ export async function getVideoMetadata(url: string): Promise<VideoMetadata | nul
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  return (bytes / 1024).toFixed(1) + ' KB';
+}
+
 function buildMetadataFromYtdlp(
   parsed: { id: string; type: 'video' | 'shorts' },
   data: any,
@@ -108,11 +115,13 @@ function buildMetadataFromYtdlp(
       let qualityName = 'SD';
       if (f.height >= 1080) qualityName = 'FHD';
       else if (f.height >= 720) qualityName = 'HD';
+      const bytes = f.filesize || f.filesize_approx;
       availableFormats.push({
         itag,
         label: `MP4 - (${f.height}p ${qualityName})`,
         type: 'video',
         quality: `${f.height}p`,
+        ...(bytes ? { fileSize: formatBytes(bytes) } : {}),
       });
     });
 
@@ -134,13 +143,26 @@ function buildMetadataFromYtdlp(
       const itag = parseInt(f.format_id, 10);
       if (!itag || isNaN(itag)) return;
       const kbps = Math.round(f.abr as number);
+      const bytes = f.filesize || f.filesize_approx;
       availableFormats.push({
         itag,
         label: `Audio - ${kbps}kbps (${f.ext || 'webm'})`,
         type: 'audio',
         quality: `${kbps}kbps`,
+        ...(bytes ? { fileSize: formatBytes(bytes) } : {}),
       });
     });
+
+  // MP3 option — reuses best audio itag but converted via ffmpeg on download
+  const bestAudio = Array.from(audioMap.values()).sort((a, b) => (b.abr || 0) - (a.abr || 0))[0];
+  if (bestAudio) {
+    availableFormats.push({
+      itag: 9000,
+      label: 'MP3 - (128kbps)',
+      type: 'audio',
+      quality: 'mp3',
+    });
+  }
 
   console.log(`[META] yt-dlp availableFormats: ${availableFormats.length}`, availableFormats.map(f => f.label));
 

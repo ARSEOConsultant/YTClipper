@@ -14,6 +14,25 @@ import path from 'path';
  * Gets the direct download URL or dynamic streaming URL for a specific YouTube video format.
  */
 export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ downloadUrl: string; filename: string; requiresJob?: boolean; videoItag?: number; audioItag?: number }> {
+  // ── Special case: MP3 conversion (virtual itag 9000) ──
+  if (itag === 9000) {
+    const ytdlpInfo = await getVideoInfoViaYtdlp(url);
+    if (!ytdlpInfo) throw new Error('Could not fetch video info for MP3 conversion.');
+    const formats = (ytdlpInfo.formats || []).filter((f: any) => f.url);
+    const bestAudio = formats
+      .filter((f: any) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
+      .sort((a: any, b: any) => (b.abr || 0) - (a.abr || 0))[0];
+    if (!bestAudio) throw new Error('No audio format found for MP3 conversion.');
+    const safeTitle = (ytdlpInfo.title || 'audio').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    return {
+      downloadUrl: '',
+      filename: `ytclipper_${safeTitle}.mp3`,
+      requiresJob: true,
+      videoItag: 9000,
+      audioItag: parseInt(bestAudio.format_id, 10),
+    };
+  }
+
   // ── Try yt-dlp first (handles all videos reliably) ──
   try {
     const ytdlpInfo = await getVideoInfoViaYtdlp(url);
@@ -96,6 +115,50 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
  */
 export async function processMediaJob(jobId: string, url: string, videoItag: number, audioItag: number, filename: string): Promise<void> {
   try {
+    // ── MP3 conversion path (videoItag === 9000) ──
+    if (videoItag === 9000) {
+      let audioUrl: string | undefined;
+      try {
+        const ytdlpInfo = await getVideoInfoViaYtdlp(url);
+        const af = (ytdlpInfo?.formats || []).find((f: any) => parseInt(f.format_id, 10) === audioItag && f.url);
+        audioUrl = af?.url;
+      } catch (_e) { /* fall through */ }
+
+      if (!audioUrl) {
+        const options = getYtdlOptions();
+        const info = await ytdl.getInfo(url, options);
+        audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
+      }
+      if (!audioUrl) throw new Error('Audio URL not found for MP3 conversion.');
+
+      let activeFfmpegPath = ffmpegPath || '';
+      if (!fs.existsSync(activeFfmpegPath)) {
+        const local = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg');
+        if (fs.existsSync(local)) activeFfmpegPath = local;
+      }
+      const tmpDir = path.join(process.cwd(), 'tmp');
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      const filePath = path.join(tmpDir, `${jobId}_${filename}`);
+
+      const ffmpegProcess = spawn(activeFfmpegPath, [
+        '-loglevel', 'error', '-i', audioUrl,
+        '-vn', '-ar', '44100', '-ac', '2', '-b:a', '128k',
+        '-f', 'mp3', '-y', filePath,
+      ]) as any;
+      ffmpegProcess.on('close', (code: number | null) => {
+        if (code === 0) {
+          updateJob(jobId, { status: 'completed', filePath, filename });
+          setTimeout(() => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 15 * 60 * 1000);
+        } else {
+          updateJob(jobId, { status: 'error', error: `FFmpeg MP3 conversion failed (code ${code})` });
+        }
+      });
+      ffmpegProcess.on('error', (err: Error) => {
+        updateJob(jobId, { status: 'error', error: 'Failed to spawn FFmpeg for MP3' });
+      });
+      return;
+    }
+
     let videoUrl: string | undefined;
     let audioUrl: string | undefined;
 

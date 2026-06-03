@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/sonner';
 import Link from 'next/link';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 
-const inter = Inter({ subsets: ['latin'] });
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'YouTube Video Downloader - Download MP4, MP3 and Transcripts',
@@ -17,8 +21,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} min-h-screen flex flex-col bg-white text-zinc-900`}>
+    <html lang="en" className={jakarta.className}>
+      <body className="min-h-screen flex flex-col bg-white text-zinc-900">
         <header className="sticky top-0 z-50 w-full border-b border-zinc-100 bg-white/80 backdrop-blur-md">
           <div className="container mx-auto px-4 h-16 flex items-center justify-between">
             <Link href="/" className="font-bold text-xl tracking-tight text-primary flex items-center gap-2">
@@ -28,7 +32,6 @@ export default function RootLayout({
               YTClipper
             </Link>
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-zinc-600">
-              <Link href="/youtube-to-mp4" className="hover:text-primary transition-colors">MP4</Link>
               <Link href="/youtube-to-mp3" className="hover:text-primary transition-colors">MP3</Link>
               <Link href="/youtube-shorts-downloader" className="hover:text-primary transition-colors">Shorts</Link>
               <Link href="/youtube-transcript-downloader" className="hover:text-primary transition-colors">Transcript</Link>

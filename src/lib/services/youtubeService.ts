@@ -116,9 +116,10 @@ function buildMetadataFromYtdlp(
       if (f.height >= 1080) qualityName = 'FHD';
       else if (f.height >= 720) qualityName = 'HD';
       const bytes = f.filesize || f.filesize_approx;
+      const sizeLabel = bytes ? ` — ${formatBytes(bytes)}` : '';
       availableFormats.push({
         itag,
-        label: `MP4 - (${f.height}p ${qualityName})`,
+        label: `MP4 - (${f.height}p ${qualityName})${sizeLabel}`,
         type: 'video',
         quality: `${f.height}p`,
         ...(bytes ? { fileSize: formatBytes(bytes) } : {}),

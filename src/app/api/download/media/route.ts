@@ -5,11 +5,14 @@ import { checkAllowedProcessing } from '@/lib/services/complianceService';
 
 export async function POST(req: Request) {
   try {
-    const ip = req.headers.get('x-forwarded-for') || '127.0.0.1';
-    const rateLimit = await checkIpLimit(ip);
-    
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+    const rateLimit = await checkIpLimit(ip, 'download');
+
     if (!rateLimit.success) {
-      return NextResponse.json({ error: 'Rate limit exceeded. Please wait a minute.' }, { status: 429 });
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a minute and try again.' },
+        { status: 429, headers: { 'Retry-After': '60' } },
+      );
     }
 
     const { url, itag } = await req.json();

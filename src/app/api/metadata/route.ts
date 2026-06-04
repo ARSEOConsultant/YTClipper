@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getVideoMetadata } from '@/lib/services/youtubeService';
 import { checkAllowedProcessing } from '@/lib/services/complianceService';
+import { checkIpLimit } from '@/lib/services/rateLimitService';
 
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || '127.0.0.1';
+    const rateLimit = await checkIpLimit(ip, 'metadata');
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a minute and try again.' },
+        { status: 429, headers: { 'Retry-After': '60' } },
+      );
+    }
+
     const { url } = await request.json();
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });

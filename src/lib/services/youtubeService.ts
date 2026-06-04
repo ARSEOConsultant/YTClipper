@@ -145,9 +145,10 @@ function buildMetadataFromYtdlp(
       if (!itag || isNaN(itag)) return;
       const kbps = Math.round(f.abr as number);
       const bytes = f.filesize || f.filesize_approx;
+      const sizeLabel = bytes ? ` — ${formatBytes(bytes)}` : '';
       availableFormats.push({
         itag,
-        label: `Audio - ${kbps}kbps (${f.ext || 'webm'})`,
+        label: `Audio - ${kbps}kbps (${f.ext || 'webm'})${sizeLabel}`,
         type: 'audio',
         quality: `${kbps}kbps`,
         ...(bytes ? { fileSize: formatBytes(bytes) } : {}),

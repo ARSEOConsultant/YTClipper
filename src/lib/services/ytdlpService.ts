@@ -6,6 +6,23 @@ import path from 'path';
 const COOKIE_FILE = path.join(tmpdir(), 'ytclipper-yt-cookies.txt');
 let cookieFileWritten = false;
 
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const metadataCache = new Map<string, { data: YtdlpInfo; expiresAt: number }>();
+
+function getCached(videoId: string): YtdlpInfo | null {
+  const entry = metadataCache.get(videoId);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    metadataCache.delete(videoId);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCache(videoId: string, data: YtdlpInfo): void {
+  metadataCache.set(videoId, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
 function writeCookieFile(): string {
   if (cookieFileWritten) return COOKIE_FILE;
 
@@ -101,9 +118,36 @@ if (typeof window === 'undefined') {
     stdio: 'ignore',
   });
   upgradeProc.unref();
+
+  // Clean up orphaned tmp files left by previous crashed sessions
+  try {
+    const { readdirSync, statSync, unlinkSync } = require('fs');
+    const tmpDir = require('path').join(process.cwd(), 'tmp');
+    const cutoff = Date.now() - 15 * 60 * 1000;
+    if (require('fs').existsSync(tmpDir)) {
+      for (const file of readdirSync(tmpDir)) {
+        const filePath = require('path').join(tmpDir, file);
+        try {
+          if (statSync(filePath).mtimeMs < cutoff) unlinkSync(filePath);
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
 }
 
 export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | null> {
+  // Extract video ID for cache key
+  const idMatch = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/]+)/);
+  const videoId = idMatch?.[1];
+
+  if (videoId) {
+    const cached = getCached(videoId);
+    if (cached) {
+      console.log(`[yt-dlp] cache HIT for ${videoId}`);
+      return cached;
+    }
+  }
+
   const cookieFile = writeCookieFile();
 
   return new Promise((resolve) => {
@@ -131,7 +175,9 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
         return;
       }
       try {
-        resolve(JSON.parse(stdout.trim()));
+        const data = JSON.parse(stdout.trim()) as YtdlpInfo;
+        if (videoId) setCache(videoId, data);
+        resolve(data);
       } catch (_e) {
         resolve(null);
       }

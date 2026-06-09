@@ -20,6 +20,7 @@ interface ToolLandingPageTemplateProps {
   defaultFormat?: 'mp4' | 'mp3' | 'transcript';
   hideFormatSelection?: boolean;
   audioOnly?: boolean;
+  reasons?: { title: string; description: string }[];
 }
 
 export default function ToolLandingPageTemplate({
@@ -30,6 +31,7 @@ export default function ToolLandingPageTemplate({
   defaultFormat,
   hideFormatSelection = false,
   audioOnly = false,
+  reasons,
 }: ToolLandingPageTemplateProps) {
   const [url, setUrl] = useState('');
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
@@ -229,6 +231,27 @@ export default function ToolLandingPageTemplate({
         </section>
 
         {/* Content Sections */}
+        {reasons && (
+          <section className="py-16 px-4 bg-zinc-50">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-3xl md:text-4xl font-bold text-zinc-900 mb-12 text-center">
+                Why YTClipper?
+              </h2>
+              <div className="grid md:grid-cols-2 gap-8">
+                {reasons.map((reason, index) => (
+                  <div key={index} className="bg-white rounded-lg p-6 border border-zinc-200">
+                    <h3 className="text-lg font-semibold text-zinc-900 mb-3">
+                      {reason.title}
+                    </h3>
+                    <p className="text-zinc-600 leading-relaxed">
+                      {reason.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
         <FAQSection faqs={faqs} />
         <RelatedTools currentPath={path} />
       </main>

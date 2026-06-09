@@ -11,8 +11,8 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'YouTube Video Downloader - Download MP4, MP3 and Transcripts',
-  description: 'Download authorised YouTube videos in MP4, extract MP3 audio, and save video transcripts online.',
+  title: 'YouTube Downloader - Free MP4, MP3 & Transcript Extractor',
+  description: 'Download YouTube videos as MP4, extract MP3 audio, or save transcripts instantly. Free, no account needed, no signup required. Works with any YouTube video.',
 };
 
 export default function RootLayout({

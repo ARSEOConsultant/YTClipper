@@ -37,18 +37,25 @@ const tools = [
   },
 ];
 
-export default function RelatedTools({ currentPath }: { currentPath?: string }) {
-  const visibleTools = tools.filter(tool => tool.href !== currentPath);
+export default function RelatedTools({ currentPath, showAll = false }: { currentPath?: string; showAll?: boolean }) {
+  const visibleTools = showAll ? tools : tools.filter(tool => tool.href !== currentPath);
+  const gridCols = showAll 
+    ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' 
+    : 'grid-cols-1 md:grid-cols-3';
 
   return (
     <section className="w-full bg-zinc-50 py-16 px-4 border-t border-zinc-100">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900 mb-2">More Tools</h2>
-          <p className="text-zinc-500">Explore our other free utilities</p>
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-900 mb-2">
+            {showAll ? 'Our Tools' : 'More Tools'}
+          </h2>
+          <p className="text-zinc-500">
+            {showAll ? 'Explore our range of free utilities' : 'Explore our other free utilities'}
+          </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {visibleTools.slice(0, 3).map((tool) => (
+        <div className="grid gap-6 class-grid style-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+          {visibleTools.map((tool) => (
             <Link key={tool.href} href={tool.href} className="block group">
               <Card className="p-6 h-full border-zinc-200 hover:border-primary/50 hover:shadow-lg transition-all duration-300">
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${tool.bg} ${tool.color}`}>

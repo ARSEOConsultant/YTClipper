@@ -7,7 +7,6 @@ if (typeof window === 'undefined') {
   const cookiesStr = process.env.YOUTUBE_COOKIES;
 
   if (cookiesStr) {
-    // Clean any surrounding single/double quotes added by Dotenv/Next.js
     let cleanCookiesStr = cookiesStr.trim();
     if (cleanCookiesStr.startsWith("'") && cleanCookiesStr.endsWith("'")) {
       cleanCookiesStr = cleanCookiesStr.slice(1, -1).trim();
@@ -16,6 +15,7 @@ if (typeof window === 'undefined') {
       cleanCookiesStr = cleanCookiesStr.slice(1, -1).trim();
     }
 
+    console.log(`[DEBUG] process.env.YOUTUBE_COOKIES is defined. Raw length: ${cookiesStr.length}, Cleaned length: ${cleanCookiesStr.length}`);
     console.log('[DEBUG] process.env.YOUTUBE_COOKIES value start:', cleanCookiesStr.slice(0, 100));
 
     if (cleanCookiesStr && cleanCookiesStr !== 'PASTE_YOUR_JSON_COOKIES_HERE') {
@@ -23,10 +23,12 @@ if (typeof window === 'undefined') {
         const cookies = JSON.parse(cleanCookiesStr);
         if (Array.isArray(cookies)) {
           agent = ytdl.createAgent(cookies);
-          console.log('Successfully created ytdl-core-enhanced agent using environment cookies.');
+          console.log(`Successfully created ytdl-core-enhanced agent using environment cookies. Loaded ${cookies.length} cookies.`);
+        } else {
+          console.error('[ytdlAgent] Parsed YOUTUBE_COOKIES is not an array. Type is:', typeof cookies);
         }
-      } catch (error) {
-        console.error('Error parsing YOUTUBE_COOKIES env variable:', error);
+      } catch (error: any) {
+        console.error('Error parsing YOUTUBE_COOKIES env variable:', error.message || error, error.stack);
       }
     } else {
       console.log('[DEBUG] YOUTUBE_COOKIES is empty or contains the default placeholder.');

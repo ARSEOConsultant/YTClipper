@@ -25,14 +25,24 @@ export interface VideoMetadata {
 
 export { parseYouTubeUrl, validateYouTubeUrl } from './youtubeUrlParser';
 
+export interface MetadataResult {
+  success: boolean;
+  metadata: VideoMetadata | null;
+  errors: string[];
+}
+
 /**
  * Fetches video metadata.
  * Attempt 1: yt-dlp (android_vr client — reliable for all videos)
  * Attempt 2: ytdl-core-enhanced (node.js library, fallback)
  */
-export async function getVideoMetadata(url: string): Promise<VideoMetadata | null> {
+export async function getVideoMetadata(url: string): Promise<MetadataResult> {
   const parsed = parseYouTubeUrl(url);
-  if (!parsed) return null;
+  if (!parsed) {
+    return { success: false, metadata: null, errors: ['Invalid YouTube URL format'] };
+  }
+
+  const errors: string[] = [];
 
   // ── Attempt 1: yt-dlp via python3 subprocess ──
   try {
@@ -40,10 +50,17 @@ export async function getVideoMetadata(url: string): Promise<VideoMetadata | nul
     if (ytdlpData && ytdlpData.formats?.length > 0) {
       console.log(`[META] yt-dlp returned ${ytdlpData.formats.length} formats`);
       const meta = buildMetadataFromYtdlp(parsed, ytdlpData);
-      if (meta.availableFormats.length > 0) return meta;
+      if (meta.availableFormats.length > 0) {
+        return { success: true, metadata: meta, errors };
+      } else {
+        errors.push('yt-dlp returned data but no available formats matched requirements (MP4 / Audio formats).');
+      }
+    } else {
+      errors.push('yt-dlp failed to return formats (returned null or empty formats list).');
     }
   } catch (e: any) {
-    console.warn('[META] yt-dlp failed:', e.message);
+    console.warn('[META] yt-dlp failed:', e.message || e);
+    errors.push(`yt-dlp subprocess/parsing exception: ${e.message || e}`);
   }
 
   // ── Attempt 2: Direct InnerTube client ──
@@ -51,10 +68,18 @@ export async function getVideoMetadata(url: string): Promise<VideoMetadata | nul
     const directResult = await getVideoInfoDirect(parsed.id);
     if (directResult && directResult.success && directResult.formats.length > 1) {
       console.log(`[META] Direct InnerTube succeeded: ${directResult.formats.length} formats`);
-      return buildMetadata(parsed, directResult.videoDetails, directResult.formats);
+      return {
+        success: true,
+        metadata: buildMetadata(parsed, directResult.videoDetails, directResult.formats),
+        errors
+      };
+    } else {
+      const reason = directResult ? `status success=${directResult.success}, formats=${directResult.formats?.length ?? 0}` : 'returned null';
+      errors.push(`Direct InnerTube client failed: ${reason}`);
     }
   } catch (e: any) {
-    console.warn('[META] Direct InnerTube failed:', e.message);
+    console.warn('[META] Direct InnerTube failed:', e.message || e);
+    errors.push(`Direct InnerTube exception: ${e.message || e}`);
   }
 
   // ── Attempt 3: ytdl-core-enhanced ──
@@ -62,11 +87,18 @@ export async function getVideoMetadata(url: string): Promise<VideoMetadata | nul
     const options = getYtdlOptions();
     const info = await ytdl.getInfo(url, options);
     console.log(`[META] ytdl-core-enhanced returned ${info.formats?.length ?? 0} formats`);
-    return buildMetadata(parsed, info.videoDetails, info.formats);
-  } catch (error) {
-    console.error('[META] All metadata sources failed');
-    return null;
+    return {
+      success: true,
+      metadata: buildMetadata(parsed, info.videoDetails, info.formats),
+      errors
+    };
+  } catch (error: any) {
+    console.error('[META] ytdl-core-enhanced failed:', error.message || error);
+    errors.push(`ytdl-core-enhanced failed: ${error.message || error}`);
   }
+
+  console.error('[META] All metadata sources failed');
+  return { success: false, metadata: null, errors };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────

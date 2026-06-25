@@ -27,7 +27,10 @@ function writeCookieFile(): string {
   if (cookieFileWritten) return COOKIE_FILE;
 
   const cookiesStr = process.env.YOUTUBE_COOKIES;
-  if (!cookiesStr) return '';
+  if (!cookiesStr) {
+    console.log('[yt-dlp] YOUTUBE_COOKIES env var is not defined');
+    return '';
+  }
 
   let clean = cookiesStr.trim();
   if (clean.startsWith("'") && clean.endsWith("'")) clean = clean.slice(1, -1).trim();
@@ -35,7 +38,10 @@ function writeCookieFile(): string {
 
   try {
     const cookies = JSON.parse(clean);
-    if (!Array.isArray(cookies)) return '';
+    if (!Array.isArray(cookies)) {
+      console.error('[yt-dlp] Parsed cookies is not an array.');
+      return '';
+    }
 
     let content = '# Netscape HTTP Cookie File\n';
     for (const c of cookies) {
@@ -49,8 +55,10 @@ function writeCookieFile(): string {
 
     writeFileSync(COOKIE_FILE, content);
     cookieFileWritten = true;
+    console.log(`[yt-dlp] Successfully wrote cookie file to ${COOKIE_FILE} with ${cookies.length} cookies.`);
     return COOKIE_FILE;
-  } catch (_e) {
+  } catch (e: any) {
+    console.error('[yt-dlp] Error writing/parsing cookie file:', e.message || e, e.stack);
     return '';
   }
 }
@@ -165,12 +173,19 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
     if (cookieFile) args.push('--cookies', cookieFile);
     args.push(url);
 
+    console.log(`[yt-dlp] Spawning: python3 ${args.join(' ')}`);
+
     const proc = spawn('python3', args, { timeout: 25000 });
     let stdout = '';
+    let stderr = '';
 
     proc.stdout.on('data', (d: Buffer) => stdout += d.toString());
+    proc.stderr.on('data', (d: Buffer) => stderr += d.toString());
+
     proc.on('close', (code: number | null) => {
+      console.log(`[yt-dlp] process exited with code ${code}`);
       if (code !== 0 || !stdout.trim()) {
+        console.error(`[yt-dlp] failed with code ${code}. Stderr: ${stderr.trim()}`);
         resolve(null);
         return;
       }
@@ -178,10 +193,15 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
         const data = JSON.parse(stdout.trim()) as YtdlpInfo;
         if (videoId) setCache(videoId, data);
         resolve(data);
-      } catch (_e) {
+      } catch (e: any) {
+        console.error('[yt-dlp] JSON parse error on stdout:', e.message, 'Stdout preview:', stdout.slice(0, 200));
         resolve(null);
       }
     });
-    proc.on('error', () => resolve(null));
+
+    proc.on('error', (err: any) => {
+      console.error('[yt-dlp] Process spawn error (is python3 installed?):', err.message || err, err);
+      resolve(null);
+    });
   });
 }

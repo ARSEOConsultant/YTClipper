@@ -52,7 +52,10 @@ export interface InnerTubeResult {
  */
 export function buildCookieString(): string {
   const cookiesStr = process.env.YOUTUBE_COOKIES;
-  if (!cookiesStr) return '';
+  if (!cookiesStr) {
+    console.log('[DirectInnerTube] YOUTUBE_COOKIES env var is not defined');
+    return '';
+  }
 
   let clean = cookiesStr.trim();
   if (clean.startsWith("'") && clean.endsWith("'")) clean = clean.slice(1, -1).trim();
@@ -60,11 +63,16 @@ export function buildCookieString(): string {
 
   try {
     const cookies = JSON.parse(clean);
-    if (!Array.isArray(cookies)) return '';
+    if (!Array.isArray(cookies)) {
+      console.error('[DirectInnerTube] Parsed cookies is not an array.');
+      return '';
+    }
+    console.log(`[DirectInnerTube] Successfully loaded ${cookies.length} cookies for HTTP header injection.`);
     return cookies
       .map((c: any) => `${c.name}=${c.value}`)
       .join('; ');
-  } catch (_e) {
+  } catch (e: any) {
+    console.error('[DirectInnerTube] Error parsing cookie JSON:', e.message || e, e.stack);
     return '';
   }
 }
@@ -93,6 +101,7 @@ async function fetchWatchPage(videoId: string, cookieString: string): Promise<{
   }
 
   const res = await fetch(url, { headers });
+  console.log(`[DirectInnerTube] fetchWatchPage status for ${videoId}: ${res.status}`);
   const html = await res.text();
 
   const visitorMatch = html.match(/"VISITOR_DATA"\s*:\s*"([^"]+)"/);
@@ -423,7 +432,7 @@ export async function getVideoInfoDirect(videoId: string): Promise<InnerTubeResu
         }
       }
     } else {
-      console.log('[DirectInnerTube] WEB client failed:', webData?.playabilityStatus?.reason || 'Unknown');
+      console.log('[DirectInnerTube] WEB client failed. PlayabilityStatus:', JSON.stringify(webData?.playabilityStatus));
     }
   } catch (e: any) {
     console.error('[DirectInnerTube] WEB client error:', e.message);
@@ -454,7 +463,7 @@ export async function getVideoInfoDirect(videoId: string): Promise<InnerTubeResu
         }
       }
     } else {
-      console.log('[DirectInnerTube] ANDROID client failed:', androidData?.playabilityStatus?.reason || 'Unknown');
+      console.log('[DirectInnerTube] ANDROID client failed. PlayabilityStatus:', JSON.stringify(androidData?.playabilityStatus));
     }
   } catch (e: any) {
     console.error('[DirectInnerTube] ANDROID client error:', e.message);

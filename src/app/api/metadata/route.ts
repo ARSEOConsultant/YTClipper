@@ -24,13 +24,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: allowed.reason }, { status: 403 });
     }
 
-    const metadata = await getVideoMetadata(url);
-    if (!metadata) {
-      return NextResponse.json({ error: 'Failed to fetch metadata' }, { status: 404 });
+    const result = await getVideoMetadata(url);
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          error: 'Failed to fetch metadata from all sources',
+          details: result.errors,
+          cookiesStatus: {
+            exists: !!process.env.YOUTUBE_COOKIES,
+            length: process.env.YOUTUBE_COOKIES?.trim().length || 0,
+          }
+        },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json(metadata);
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(result.metadata);
+  } catch (error: any) {
+    console.error('[API/METADATA] Unexpected exception in POST handler:', error);
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        exception: error.message || error,
+        cookiesStatus: {
+          exists: !!process.env.YOUTUBE_COOKIES,
+          length: process.env.YOUTUBE_COOKIES?.trim().length || 0,
+        }
+      },
+      { status: 500 }
+    );
   }
 }

@@ -111,52 +111,79 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
   } catch (error: any) {
     console.error('[MEDIA] Both local download sources failed:', error.message);
     
-    // ── Attempt 3: Cobalt API Fallback ──
+    // ── Attempt 3: Invidious API Fallback ──
     try {
-      console.log('[MEDIA] Attempting Cobalt API fallback...');
-      let vQuality = '720';
-      if (itag === 18) vQuality = '360';
-      if (itag === 137) vQuality = '1080';
+      console.log('[MEDIA] Attempting Invidious API fallback...');
       
-      const isAudioOnly = itag === 140 || itag === 9000 || itag === 251;
-      const aFormat = itag === 9000 ? 'mp3' : 'best';
+      const instances = [
+        'https://vid.puffyan.us',
+        'https://invidious.jing.rocks',
+        'https://inv.tux.pizza',
+        'https://invidious.lunar.icu'
+      ];
 
-      const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url,
-          vQuality,
-          isAudioOnly,
-          aFormat,
-          disableMetadata: true
-        })
-      });
+      for (const instance of instances) {
+        try {
+          const invRes = await fetch(`${instance}/api/v1/videos/${parseYouTubeId(url)}`);
+          if (invRes.ok) {
+            const invData = await invRes.json();
+            
+            const safeTitle = (invData.title || 'video').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            
+            // If MP3, we just need the best audio URL and let the job process it
+            if (itag === 9000) {
+              const bestAudio = (invData.adaptiveFormats || [])
+                .filter((f: any) => f.type && f.type.startsWith('audio/'))
+                .sort((a: any, b: any) => (parseInt(b.bitrate || 0)) - (parseInt(a.bitrate || 0)))[0];
+                
+              if (bestAudio && bestAudio.url) {
+                return {
+                  downloadUrl: '',
+                  filename: `ytclipper_${safeTitle}.mp3`,
+                  requiresJob: true,
+                  videoItag: 9000,
+                  audioItag: parseInt(bestAudio.itag, 10),
+                };
+              }
+            }
 
-      if (cobaltRes.ok) {
-        const cobaltData = await cobaltRes.json();
-        if (cobaltData.url) {
-          const safeTitle = 'ytclipper_video_fallback';
-          let ext = isAudioOnly ? (itag === 9000 ? 'mp3' : 'm4a') : 'mp4';
-          const typeLabel = isAudioOnly ? 'audio' : 'video';
-          console.log('[MEDIA] Cobalt API fallback succeeded');
-          
-          return {
-            downloadUrl: cobaltData.url,
-            filename: `${safeTitle}_${typeLabel}.${ext}`,
-            requiresJob: false // Cobalt handles the merging
-          };
+            // For specific itag, find in formatStreams or adaptiveFormats
+            let formatMatch = (invData.formatStreams || []).find((f: any) => parseInt(f.itag) === itag);
+            if (!formatMatch) {
+              formatMatch = (invData.adaptiveFormats || []).find((f: any) => parseInt(f.itag) === itag);
+            }
+
+            if (formatMatch && formatMatch.url) {
+              console.log(`[MEDIA] Invidious fallback succeeded via ${instance}`);
+              const isAudioOnly = formatMatch.type && formatMatch.type.startsWith('audio/');
+              const ext = isAudioOnly ? 'm4a' : 'mp4';
+              return {
+                downloadUrl: formatMatch.url,
+                filename: `ytclipper_${safeTitle}_${isAudioOnly ? 'audio' : 'video'}.${ext}`,
+                requiresJob: false
+              };
+            }
+          }
+        } catch (e: any) {
+          console.warn(`[MEDIA] Invidious instance ${instance} failed:`, e.message);
         }
       }
-      console.warn('[MEDIA] Cobalt API fallback failed or returned no URL');
-    } catch (cobaltErr: any) {
-      console.error('[MEDIA] Cobalt API fallback exception:', cobaltErr.message);
+    } catch (invErr: any) {
+      console.error('[MEDIA] Invidious API fallback exception:', invErr.message);
     }
 
     throw new Error(error.message || 'Failed to extract media. YouTube may be blocking your IP. Consider adding YOUTUBE_COOKIES to your .env.local file.');
+  }
+}
+
+function parseYouTubeId(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtu.be')) return parsed.pathname.slice(1);
+    if (parsed.pathname.startsWith('/shorts/')) return parsed.pathname.split('/')[2];
+    return parsed.searchParams.get('v') || '';
+  } catch (e) {
+    return '';
   }
 }
 

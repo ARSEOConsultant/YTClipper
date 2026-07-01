@@ -97,36 +97,89 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
     errors.push(`ytdl-core-enhanced failed: ${error.message || error}`);
   }
 
-  // ── Attempt 4: YouTube oEmbed API (Basic Metadata Fallback) ──
-  try {
-    const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
-    if (oembedRes.ok) {
-      const oembedData = await oembedRes.json();
-      console.log(`[META] oEmbed fallback succeeded for ${parsed.id}`);
-      return {
-        success: true,
-        metadata: {
-          id: parsed.id,
-          title: oembedData.title || 'Unknown Title',
-          channelTitle: oembedData.author_name || 'Unknown Channel',
-          thumbnailUrl: oembedData.thumbnail_url || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`,
-          duration: '??:??', // oEmbed doesn't provide duration
-          type: parsed.type,
-          availableFormats: [
-            { itag: 18, label: 'MP4 - (360p SD)', type: 'video', quality: '360p' },
-            { itag: 22, label: 'MP4 - (720p HD)', type: 'video', quality: '720p' },
-            { itag: 140, label: 'Audio - (128kbps m4a)', type: 'audio', quality: '128kbps' },
-            { itag: 9000, label: 'MP3 - (128kbps)', type: 'audio', quality: 'mp3' },
-          ],
-        },
-        errors,
-      };
-    } else {
-      errors.push(`oEmbed fallback failed: HTTP ${oembedRes.status}`);
+  // ── Attempt 4: Invidious API (Full proxy fallback for metadata + streams) ──
+  const instances = [
+    'https://vid.puffyan.us',
+    'https://invidious.jing.rocks',
+    'https://inv.tux.pizza',
+    'https://invidious.lunar.icu'
+  ];
+
+  for (const instance of instances) {
+    try {
+      console.log(`[META] Attempting Invidious fallback via ${instance}`);
+      const invRes = await fetch(`${instance}/api/v1/videos/${parsed.id}`);
+      if (invRes.ok) {
+        const invData = await invRes.json();
+        
+        // Build metadata from Invidious response
+        const totalSeconds = invData.lengthSeconds || 0;
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const duration = hours > 0
+          ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+          : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+          
+        const thumbnail = invData.videoThumbnails?.find((t: any) => t.quality === 'maxres' || t.quality === 'high')?.url 
+          || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`;
+          
+        const availableFormats: FormatOption[] = [];
+        
+        // Process combined formats (formatStreams)
+        if (invData.formatStreams) {
+          invData.formatStreams.forEach((f: any) => {
+            if (!f.itag) return;
+            availableFormats.push({
+              itag: parseInt(f.itag),
+              label: `MP4 - (${f.qualityLabel || f.resolution})`,
+              type: 'video',
+              quality: f.qualityLabel || f.resolution,
+            });
+          });
+        }
+        
+        // Process audio-only formats (adaptiveFormats)
+        if (invData.adaptiveFormats) {
+          invData.adaptiveFormats.forEach((f: any) => {
+            if (f.type && f.type.startsWith('audio/')) {
+              const bitrateStr = f.bitrate ? Math.round(parseInt(f.bitrate)/1000) : '128';
+              availableFormats.push({
+                itag: parseInt(f.itag),
+                label: `Audio - ${bitrateStr}kbps (${f.container || 'm4a'})`,
+                type: 'audio',
+                quality: `${bitrateStr}kbps`,
+              });
+            }
+          });
+        }
+        
+        // MP3 fallback option
+        availableFormats.push({
+          itag: 9000,
+          label: 'MP3 - (128kbps)',
+          type: 'audio',
+          quality: 'mp3',
+        });
+
+        console.log(`[META] Invidious fallback succeeded for ${parsed.id}`);
+        return {
+          success: true,
+          metadata: {
+            id: parsed.id,
+            title: invData.title || 'Unknown Title',
+            channelTitle: invData.author || 'Unknown Channel',
+            thumbnailUrl: thumbnail,
+            duration,
+            type: parsed.type,
+            availableFormats,
+          },
+          errors,
+        };
+      }
+    } catch (e: any) {
+      console.warn(`[META] Invidious instance ${instance} failed:`, e.message);
     }
-  } catch (error: any) {
-    console.error('[META] oEmbed fallback failed:', error.message || error);
-    errors.push(`oEmbed fallback failed: ${error.message || error}`);
   }
 
   console.error('[META] All metadata sources failed');

@@ -16,21 +16,25 @@ import path from 'path';
 export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ downloadUrl: string; filename: string; requiresJob?: boolean; videoItag?: number; audioItag?: number }> {
   // ── Special case: MP3 conversion (virtual itag 9000) ──
   if (itag === 9000) {
-    const ytdlpInfo = await getVideoInfoViaYtdlp(url);
-    if (!ytdlpInfo) throw new Error('Could not fetch video info for MP3 conversion.');
-    const formats = (ytdlpInfo.formats || []).filter((f: any) => f.url);
-    const bestAudio = formats
-      .filter((f: any) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
-      .sort((a: any, b: any) => (b.abr || 0) - (a.abr || 0))[0];
-    if (!bestAudio) throw new Error('No audio format found for MP3 conversion.');
-    const safeTitle = (ytdlpInfo.title || 'audio').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    return {
-      downloadUrl: '',
-      filename: `ytclipper_${safeTitle}.mp3`,
-      requiresJob: true,
-      videoItag: 9000,
-      audioItag: parseInt(bestAudio.format_id, 10),
-    };
+    try {
+      const ytdlpInfo = await getVideoInfoViaYtdlp(url);
+      if (!ytdlpInfo) throw new Error('Could not fetch video info for MP3 conversion.');
+      const formats = (ytdlpInfo.formats || []).filter((f: any) => f.url);
+      const bestAudio = formats
+        .filter((f: any) => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none'))
+        .sort((a: any, b: any) => (b.abr || 0) - (a.abr || 0))[0];
+      if (!bestAudio) throw new Error('No audio format found for MP3 conversion.');
+      const safeTitle = (ytdlpInfo.title || 'audio').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      return {
+        downloadUrl: '',
+        filename: `ytclipper_${safeTitle}.mp3`,
+        requiresJob: true,
+        videoItag: 9000,
+        audioItag: parseInt(bestAudio.format_id, 10),
+      };
+    } catch (e: any) {
+      console.warn('[MEDIA] Local MP3 download fetch failed, falling through to Cobalt API:', e.message);
+    }
   }
 
   // ── Try yt-dlp first (handles all videos reliably) ──
@@ -105,8 +109,54 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
       filename: `ytclipper_${safeTitle}_${isAudioOnly ? 'audio' : 'video'}.${ext}`,
     };
   } catch (error: any) {
-    console.error('[MEDIA] Both download sources failed:', error.message);
-    throw new Error(error.message || 'Failed to extract media');
+    console.error('[MEDIA] Both local download sources failed:', error.message);
+    
+    // ── Attempt 3: Cobalt API Fallback ──
+    try {
+      console.log('[MEDIA] Attempting Cobalt API fallback...');
+      let vQuality = '720';
+      if (itag === 18) vQuality = '360';
+      if (itag === 137) vQuality = '1080';
+      
+      const isAudioOnly = itag === 140 || itag === 9000 || itag === 251;
+      const aFormat = itag === 9000 ? 'mp3' : 'best';
+
+      const cobaltRes = await fetch('https://api.cobalt.tools/api/json', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url,
+          vQuality,
+          isAudioOnly,
+          aFormat,
+          disableMetadata: true
+        })
+      });
+
+      if (cobaltRes.ok) {
+        const cobaltData = await cobaltRes.json();
+        if (cobaltData.url) {
+          const safeTitle = 'ytclipper_video_fallback';
+          let ext = isAudioOnly ? (itag === 9000 ? 'mp3' : 'm4a') : 'mp4';
+          const typeLabel = isAudioOnly ? 'audio' : 'video';
+          console.log('[MEDIA] Cobalt API fallback succeeded');
+          
+          return {
+            downloadUrl: cobaltData.url,
+            filename: `${safeTitle}_${typeLabel}.${ext}`,
+            requiresJob: false // Cobalt handles the merging
+          };
+        }
+      }
+      console.warn('[MEDIA] Cobalt API fallback failed or returned no URL');
+    } catch (cobaltErr: any) {
+      console.error('[MEDIA] Cobalt API fallback exception:', cobaltErr.message);
+    }
+
+    throw new Error(error.message || 'Failed to extract media. YouTube may be blocking your IP. Consider adding YOUTUBE_COOKIES to your .env.local file.');
   }
 }
 

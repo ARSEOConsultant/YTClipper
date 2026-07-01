@@ -97,6 +97,38 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
     errors.push(`ytdl-core-enhanced failed: ${error.message || error}`);
   }
 
+  // ── Attempt 4: YouTube oEmbed API (Basic Metadata Fallback) ──
+  try {
+    const oembedRes = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+    if (oembedRes.ok) {
+      const oembedData = await oembedRes.json();
+      console.log(`[META] oEmbed fallback succeeded for ${parsed.id}`);
+      return {
+        success: true,
+        metadata: {
+          id: parsed.id,
+          title: oembedData.title || 'Unknown Title',
+          channelTitle: oembedData.author_name || 'Unknown Channel',
+          thumbnailUrl: oembedData.thumbnail_url || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`,
+          duration: '??:??', // oEmbed doesn't provide duration
+          type: parsed.type,
+          availableFormats: [
+            { itag: 18, label: 'MP4 - (360p SD)', type: 'video', quality: '360p' },
+            { itag: 22, label: 'MP4 - (720p HD)', type: 'video', quality: '720p' },
+            { itag: 140, label: 'Audio - (128kbps m4a)', type: 'audio', quality: '128kbps' },
+            { itag: 9000, label: 'MP3 - (128kbps)', type: 'audio', quality: 'mp3' },
+          ],
+        },
+        errors,
+      };
+    } else {
+      errors.push(`oEmbed fallback failed: HTTP ${oembedRes.status}`);
+    }
+  } catch (error: any) {
+    console.error('[META] oEmbed fallback failed:', error.message || error);
+    errors.push(`oEmbed fallback failed: ${error.message || error}`);
+  }
+
   console.error('[META] All metadata sources failed');
   return { success: false, metadata: null, errors };
 }

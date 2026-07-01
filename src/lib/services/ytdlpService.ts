@@ -161,7 +161,6 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
   return new Promise((resolve) => {
     const args = [
       '-m', 'yt_dlp',
-      '--extractor-args', 'youtube:player_client=android_vr',
       '-j',
       '--no-download',
       '--no-warnings',

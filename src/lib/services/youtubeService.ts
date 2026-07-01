@@ -97,89 +97,67 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
     errors.push(`ytdl-core-enhanced failed: ${error.message || error}`);
   }
 
-  // ── Attempt 4: Invidious API (Full proxy fallback for metadata + streams) ──
-  const instances = [
-    'https://vid.puffyan.us',
-    'https://invidious.jing.rocks',
-    'https://inv.tux.pizza',
-    'https://invidious.lunar.icu'
-  ];
-
-  for (const instance of instances) {
-    try {
-      console.log(`[META] Attempting Invidious fallback via ${instance}`);
-      const invRes = await fetch(`${instance}/api/v1/videos/${parsed.id}`);
-      if (invRes.ok) {
-        const invData = await invRes.json();
+  // ── Attempt 4: NoEmbed (Reliable proxy for metadata) + Lemnos (for duration) ──
+  try {
+    const noembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+    if (noembedRes.ok) {
+      const noembedData = await noembedRes.json();
+      if (!noembedData.error) {
+        let duration = '??:??';
         
-        // Build metadata from Invidious response
-        const totalSeconds = invData.lengthSeconds || 0;
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        const duration = hours > 0
-          ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-          : `${minutes}:${seconds.toString().padStart(2, '0')}`;
-          
-        const thumbnail = invData.videoThumbnails?.find((t: any) => t.quality === 'maxres' || t.quality === 'high')?.url 
-          || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`;
-          
-        const availableFormats: FormatOption[] = [];
-        
-        // Process combined formats (formatStreams)
-        if (invData.formatStreams) {
-          invData.formatStreams.forEach((f: any) => {
-            if (!f.itag) return;
-            availableFormats.push({
-              itag: parseInt(f.itag),
-              label: `MP4 - (${f.qualityLabel || f.resolution})`,
-              type: 'video',
-              quality: f.qualityLabel || f.resolution,
-            });
-          });
-        }
-        
-        // Process audio-only formats (adaptiveFormats)
-        if (invData.adaptiveFormats) {
-          invData.adaptiveFormats.forEach((f: any) => {
-            if (f.type && f.type.startsWith('audio/')) {
-              const bitrateStr = f.bitrate ? Math.round(parseInt(f.bitrate)/1000) : '128';
-              availableFormats.push({
-                itag: parseInt(f.itag),
-                label: `Audio - ${bitrateStr}kbps (${f.container || 'm4a'})`,
-                type: 'audio',
-                quality: `${bitrateStr}kbps`,
-              });
+        // Fetch exact duration via Lemnos public API
+        try {
+          const lemRes = await fetch(`https://yt.lemnoslife.com/noKey/videos?part=contentDetails&id=${parsed.id}`);
+          if (lemRes.ok) {
+            const lemData = await lemRes.json();
+            const pt = lemData.items?.[0]?.contentDetails?.duration;
+            if (pt) {
+              // Parse ISO 8601 duration (PT#H#M#S)
+              const match = pt.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+              if (match) {
+                const h = parseInt(match[1] || '0', 10);
+                const m = parseInt(match[2] || '0', 10);
+                const s = parseInt(match[3] || '0', 10);
+                if (h > 0) {
+                  duration = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                } else {
+                  duration = `${m}:${s.toString().padStart(2, '0')}`;
+                }
+              }
             }
-          });
+          }
+        } catch(e) {
+          console.warn('[META] Failed to fetch duration from Lemnos:', e);
         }
-        
-        // MP3 fallback option
-        availableFormats.push({
-          itag: 9000,
-          label: 'MP3 - (128kbps)',
-          type: 'audio',
-          quality: 'mp3',
-        });
 
-        console.log(`[META] Invidious fallback succeeded for ${parsed.id}`);
+        console.log(`[META] NoEmbed fallback succeeded for ${parsed.id}`);
         return {
           success: true,
           metadata: {
             id: parsed.id,
-            title: invData.title || 'Unknown Title',
-            channelTitle: invData.author || 'Unknown Channel',
-            thumbnailUrl: thumbnail,
+            title: noembedData.title || 'Unknown Title',
+            channelTitle: noembedData.author_name || 'Unknown Channel',
+            thumbnailUrl: noembedData.thumbnail_url || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`,
             duration,
             type: parsed.type,
-            availableFormats,
+            availableFormats: [
+              { itag: 18, label: 'MP4 - (360p SD)', type: 'video', quality: '360p' },
+              { itag: 22, label: 'MP4 - (720p HD)', type: 'video', quality: '720p' },
+              { itag: 140, label: 'Audio - (128kbps m4a)', type: 'audio', quality: '128kbps' },
+              { itag: 9000, label: 'MP3 - (128kbps)', type: 'audio', quality: 'mp3' },
+            ],
           },
           errors,
         };
+      } else {
+        errors.push(`NoEmbed fallback returned error: ${noembedData.error}`);
       }
-    } catch (e: any) {
-      console.warn(`[META] Invidious instance ${instance} failed:`, e.message);
+    } else {
+      errors.push(`NoEmbed fallback failed: HTTP ${noembedRes.status}`);
     }
+  } catch (error: any) {
+    console.error('[META] NoEmbed fallback failed:', error.message || error);
+    errors.push(`NoEmbed fallback failed: ${error.message || error}`);
   }
 
   console.error('[META] All metadata sources failed');

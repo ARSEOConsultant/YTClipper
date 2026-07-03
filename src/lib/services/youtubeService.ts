@@ -2,6 +2,10 @@ import { ytdl, getYtdlOptions } from './ytdlAgent';
 import { getVideoInfoDirect } from './directInnerTube';
 import { parseYouTubeUrl } from './youtubeUrlParser';
 import { getVideoInfoViaYtdlp } from './ytdlpService';
+import { ProxyAgent } from 'undici';
+
+const proxyUrl = process.env.YOUTUBE_PROXY;
+const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
 
 export interface FormatOption {
   itag: number;
@@ -97,9 +101,78 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
     errors.push(`ytdl-core-enhanced failed: ${error.message || error}`);
   }
 
+  // ── Attempt 3.5: Google YouTube Data API v3 ──
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (apiKey) {
+    try {
+      console.log(`[META] Attempting Google YouTube Data API fallback for ${parsed.id}...`);
+      const fetchOpts: any = {};
+      if (dispatcher) fetchOpts.dispatcher = dispatcher;
+      
+      const apiRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${parsed.id}&key=${apiKey}`,
+        fetchOpts
+      );
+      if (apiRes.ok) {
+        const apiData = await apiRes.json();
+        const item = apiData.items?.[0];
+        if (item) {
+          const snippet = item.snippet;
+          const contentDetails = item.contentDetails;
+          
+          let duration = '??:??';
+          const pt = contentDetails?.duration;
+          if (pt) {
+            const match = pt.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+            if (match) {
+              const h = parseInt(match[1] || '0', 10);
+              const m = parseInt(match[2] || '0', 10);
+              const s = parseInt(match[3] || '0', 10);
+              if (h > 0) {
+                duration = `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+              } else {
+                duration = `${m}:${s.toString().padStart(2, '0')}`;
+              }
+            }
+          }
+          
+          console.log(`[META] Google API fallback succeeded for ${parsed.id}`);
+          return {
+            success: true,
+            metadata: {
+              id: parsed.id,
+              title: snippet.title || 'Unknown Title',
+              channelTitle: snippet.channelTitle || 'Unknown Channel',
+              thumbnailUrl: snippet.thumbnails?.maxres?.url || snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`,
+              duration,
+              type: parsed.type,
+              availableFormats: [
+                { itag: 18, label: 'MP4 - (360p SD)', type: 'video', quality: '360p' },
+                { itag: 22, label: 'MP4 - (720p HD)', type: 'video', quality: '720p' },
+                { itag: 140, label: 'Audio - (128kbps m4a)', type: 'audio', quality: '128kbps' },
+                { itag: 9000, label: 'MP3 - (128kbps)', type: 'audio', quality: 'mp3' },
+              ],
+            },
+            errors,
+          };
+        } else {
+          errors.push('Google API fallback returned empty items list.');
+        }
+      } else {
+        errors.push(`Google API fallback failed: HTTP ${apiRes.status}`);
+      }
+    } catch (e: any) {
+      console.warn('[META] Google API fallback failed:', e.message || e);
+      errors.push(`Google API exception: ${e.message || e}`);
+    }
+  }
+
   // ── Attempt 4: NoEmbed (Reliable proxy for metadata) + Lemnos (for duration) ──
   try {
-    const noembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+    const fetchOpts: any = {};
+    if (dispatcher) fetchOpts.dispatcher = dispatcher;
+    
+    const noembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, fetchOpts);
     if (noembedRes.ok) {
       const noembedData = await noembedRes.json();
       if (!noembedData.error) {
@@ -107,7 +180,7 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
         
         // Fetch exact duration via Lemnos public API
         try {
-          const lemRes = await fetch(`https://yt.lemnoslife.com/noKey/videos?part=contentDetails&id=${parsed.id}`);
+          const lemRes = await fetch(`https://yt.lemnoslife.com/noKey/videos?part=contentDetails&id=${parsed.id}`, fetchOpts);
           if (lemRes.ok) {
             const lemData = await lemRes.json();
             const pt = lemData.items?.[0]?.contentDetails?.duration;

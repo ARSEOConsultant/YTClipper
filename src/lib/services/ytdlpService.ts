@@ -121,9 +121,15 @@ export async function getDownloadUrlsViaYtdlp(url: string): Promise<YtdlpDownloa
 
 // Run once per process on startup — keeps yt-dlp current without blocking requests
 if (typeof window === 'undefined') {
+  const spawnEnv = { ...process.env };
+  if (process.env.YOUTUBE_PROXY) {
+    spawnEnv.HTTP_PROXY = process.env.YOUTUBE_PROXY;
+    spawnEnv.HTTPS_PROXY = process.env.YOUTUBE_PROXY;
+  }
   const upgradeProc = spawn('python3', ['-m', 'pip', 'install', '--upgrade', '--quiet', 'yt-dlp'], {
     detached: true,
     stdio: 'ignore',
+    env: spawnEnv,
   });
   upgradeProc.unref();
 
@@ -167,9 +173,15 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
       '--quiet',
       '--retries', '10',
       '--fragment-retries', '10',
+      '--js-runtimes', 'node',
+      '--impersonate', 'chrome',
+      '--extractor-args', 'youtube:player_client=default,-android_sdkless',
     ];
 
     if (cookieFile) args.push('--cookies', cookieFile);
+    if (process.env.YOUTUBE_PROXY) {
+      args.push('--proxy', process.env.YOUTUBE_PROXY);
+    }
     args.push(url);
 
     console.log(`[yt-dlp] Spawning: python3 ${args.join(' ')}`);

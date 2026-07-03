@@ -360,9 +360,9 @@ export default function ToolLandingPageTemplate({
             <div className="max-w-2xl mx-auto">
               <h3 className="text-lg font-semibold text-zinc-900 mb-4 text-center">Example transcript output format</h3>
               <div className="bg-zinc-900 rounded-xl p-6 shadow-inner font-mono text-xs sm:text-sm text-zinc-300 border border-zinc-800">
-                <p className="mb-2 text-zinc-500">// transcript_video.txt</p>
-                <p><span className="text-amber-500">[02:35]</span> Here's the key insight about the topic</p>
-                <p><span className="text-amber-500">[02:47]</span> And here's why it matters for your work</p>
+                <p className="mb-2 text-zinc-500">{"// transcript_video.txt"}</p>
+                <p><span className="text-amber-500">[02:35]</span> Here&apos;s the key insight about the topic</p>
+                <p><span className="text-amber-500">[02:47]</span> And here&apos;s why it matters for your work</p>
                 <p><span className="text-amber-500">[03:01]</span> This is the part most people skip over</p>
               </div>
             </div>

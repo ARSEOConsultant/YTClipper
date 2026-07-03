@@ -1,5 +1,9 @@
 import { ytdl, getYtdlOptions } from './ytdlAgent';
 import { getVideoInfoViaYtdlp } from './ytdlpService';
+import { ProxyAgent } from 'undici';
+
+const proxyUrl = process.env.YOUTUBE_PROXY;
+const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
 
 // @ts-ignore
 import ffmpegPath from 'ffmpeg-static';
@@ -111,6 +115,16 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
   } catch (error: any) {
     console.error('[MEDIA] Both local download sources failed:', error.message);
     
+    // ── Attempt 2.5: Cobalt API Fallback ──
+    try {
+      const cobaltResult = await getMediaUrlViaCobalt(url, itag);
+      if (cobaltResult) {
+        return cobaltResult;
+      }
+    } catch (e: any) {
+      console.warn('[MEDIA] Cobalt fallback failed:', e.message);
+    }
+
     // ── Attempt 3: Invidious API Fallback ──
     try {
       console.log('[MEDIA] Attempting Invidious API fallback...');
@@ -122,9 +136,12 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
         'https://invidious.lunar.icu'
       ];
 
+      const fetchOpts: any = {};
+      if (dispatcher) fetchOpts.dispatcher = dispatcher;
+
       for (const instance of instances) {
         try {
-          const invRes = await fetch(`${instance}/api/v1/videos/${parseYouTubeId(url)}`);
+          const invRes = await fetch(`${instance}/api/v1/videos/${parseYouTubeId(url)}`, fetchOpts);
           if (invRes.ok) {
             const invData = await invRes.json();
             
@@ -174,6 +191,61 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
 
     throw new Error(error.message || 'Failed to extract media. YouTube may be blocking your IP. Consider adding YOUTUBE_COOKIES to your .env.local file.');
   }
+}
+
+async function getMediaUrlViaCobalt(url: string, itag: number): Promise<{ downloadUrl: string; filename: string; requiresJob: boolean } | null> {
+  const cobaltInstances = [
+    'https://api.cobalt.tools/api/json',
+    'https://cobalt.api.ryzetech.live/api/json',
+    'https://api.cobalt.lol/api/json'
+  ];
+
+  let vQuality = '720';
+  if (itag === 18) vQuality = '360';
+  if (itag === 137 || itag === 136 || itag === 299) vQuality = '1080';
+
+  const isAudioOnly = itag === 140 || itag === 9000 || itag === 251;
+  const aFormat = itag === 9000 ? 'mp3' : 'best';
+
+  const fetchOpts: any = {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url,
+      vQuality,
+      isAudioOnly,
+      aFormat,
+      disableMetadata: true
+    })
+  };
+  if (dispatcher) fetchOpts.dispatcher = dispatcher;
+
+  for (const instance of cobaltInstances) {
+    try {
+      console.log(`[MEDIA] Trying Cobalt fallback via ${instance}...`);
+      const response = await fetch(instance, fetchOpts);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.url) {
+          const safeTitle = 'ytclipper_video_fallback';
+          const ext = isAudioOnly ? (itag === 9000 ? 'mp3' : 'm4a') : 'mp4';
+          const typeLabel = isAudioOnly ? 'audio' : 'video';
+          console.log(`[MEDIA] Cobalt fallback succeeded via ${instance}`);
+          return {
+            downloadUrl: data.url,
+            filename: `${safeTitle}_${typeLabel}.${ext}`,
+            requiresJob: false
+          };
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[MEDIA] Cobalt instance ${instance} failed:`, e.message);
+    }
+  }
+  return null;
 }
 
 function parseYouTubeId(url: string): string {

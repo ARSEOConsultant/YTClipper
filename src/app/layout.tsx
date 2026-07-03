@@ -54,7 +54,7 @@ export default function RootLayout({
           <div className="container mx-auto px-4 max-w-5xl">
             {/* Trust Statement */}
             <div className="mb-8 pb-8 border-b border-zinc-200/60">
-              <h4 className="font-semibold text-zinc-800 text-sm mb-4">YTClipper respects your privacy and creators' rights</h4>
+              <h4 className="font-semibold text-zinc-800 text-sm mb-4">YTClipper respects your privacy and creators&apos; rights</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-zinc-500">
                 <div>
                   <h5 className="font-bold text-zinc-700 mb-1">No signup.</h5>

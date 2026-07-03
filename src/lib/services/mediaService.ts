@@ -285,9 +285,11 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       } catch (_e) { /* fall through */ }
 
       if (!audioUrl) {
-        const options = getYtdlOptions();
-        const info = await ytdl.getInfo(url, options);
-        audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
+        try {
+          const options = getYtdlOptions();
+          const info = await ytdl.getInfo(url, options);
+          audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
+        } catch (_e) { /* fall through */ }
       }
       
       if (!audioUrl) {
@@ -350,9 +352,12 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
 
     // Fallback to ytdl for any missing URLs
     if (!videoUrl || !audioUrl) {
-      const options = getYtdlOptions();
-      const info = await ytdl.getInfo(url, options);
-      if (!audioUrl) audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
+      try {
+        const options = getYtdlOptions();
+        const info = await ytdl.getInfo(url, options);
+        if (!videoUrl) videoUrl = info.formats.find((f: any) => f.itag === videoItag)?.url;
+        if (!audioUrl) audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
+      } catch (_e) { /* fall through */ }
     }
 
     if (!videoUrl || !audioUrl) {

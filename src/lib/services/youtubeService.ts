@@ -167,6 +167,95 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
     }
   }
 
+  // ── Attempt 3.8: Piped API Fallback ──
+  try {
+    const pipedInstances = [
+      'https://pipedapi.kavin.rocks',
+      'https://piped-api.garudalinux.org',
+      'https://pipedapi.lunes.host',
+      'https://api.piped.yt'
+    ];
+    
+    const fetchOpts: any = {};
+    if (dispatcher) fetchOpts.dispatcher = dispatcher;
+
+    for (const instance of pipedInstances) {
+      try {
+        console.log(`[META] Trying Piped API fallback via ${instance}...`);
+        const res = await fetch(`${instance}/streams/${parsed.id}`, fetchOpts);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.title) {
+            const availableFormats: FormatOption[] = [];
+            
+            // Map video streams
+            const videoStreams = data.videoStreams || [];
+            videoStreams.forEach((s: any) => {
+              if (s.itag && s.height) {
+                let qualityName = 'SD';
+                if (s.height >= 1080) qualityName = 'FHD';
+                else if (s.height >= 720) qualityName = 'HD';
+                
+                const sizeLabel = s.bitrate ? ` — ${formatBytes(s.bitrate / 8 * (data.duration || 0))}` : '';
+                availableFormats.push({
+                  itag: s.itag,
+                  label: `MP4 - (${s.height}p ${qualityName})${sizeLabel}`,
+                  type: 'video',
+                  quality: `${s.height}p`
+                });
+              }
+            });
+
+            // Map audio streams
+            const audioStreams = data.audioStreams || [];
+            audioStreams.forEach((s: any) => {
+              if (s.itag && s.bitrate) {
+                const kbps = Math.round(s.bitrate / 1000);
+                const bytes = s.bitrate / 8 * (data.duration || 0);
+                const sizeLabel = bytes ? ` — ${formatBytes(bytes)}` : '';
+                availableFormats.push({
+                  itag: s.itag,
+                  label: `Audio - ${kbps}kbps (${s.format || 'm4a'})${sizeLabel}`,
+                  type: 'audio',
+                  quality: `${kbps}kbps`
+                });
+              }
+            });
+
+            // MP3 option
+            if (audioStreams.length > 0) {
+              availableFormats.push({
+                itag: 9000,
+                label: 'MP3 - (128kbps)',
+                type: 'audio',
+                quality: 'mp3'
+              });
+            }
+
+            console.log(`[META] Piped API fallback succeeded via ${instance}`);
+            return {
+              success: true,
+              metadata: {
+                id: parsed.id,
+                title: data.title,
+                channelTitle: data.uploader || 'Unknown Channel',
+                thumbnailUrl: data.thumbnailUrl || `https://i.ytimg.com/vi/${parsed.id}/hqdefault.jpg`,
+                duration: formatPipedDuration(data.duration || 0),
+                type: parsed.type,
+                availableFormats
+              },
+              errors
+            };
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[META] Piped instance ${instance} failed:`, e.message);
+      }
+    }
+  } catch (error: any) {
+    console.error('[META] Piped API fallback exception:', error.message);
+  }
+
   // ── Attempt 4: NoEmbed (Reliable proxy for metadata) + Lemnos (for duration) ──
   try {
     const fetchOpts: any = {};
@@ -437,4 +526,14 @@ function buildMetadata(
     type: parsed.type,
     availableFormats,
   };
+}
+
+function formatPipedDuration(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }

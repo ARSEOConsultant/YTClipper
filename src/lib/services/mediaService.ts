@@ -125,6 +125,16 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
       console.warn('[MEDIA] Cobalt fallback failed:', e.message);
     }
 
+    // ── Attempt 2.8: Piped API Fallback ──
+    try {
+      const pipedResult = await getMediaUrlViaPiped(url, itag);
+      if (pipedResult) {
+        return pipedResult;
+      }
+    } catch (e: any) {
+      console.warn('[MEDIA] Piped fallback failed:', e.message);
+    }
+
     // ── Attempt 3: Invidious API Fallback ──
     try {
       console.log('[MEDIA] Attempting Invidious API fallback...');
@@ -278,6 +288,20 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
         const info = await ytdl.getInfo(url, options);
         audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
       }
+      
+      if (!audioUrl) {
+        try {
+          const invUrls = await getUrlsViaInvidious(url, 9000, audioItag);
+          audioUrl = invUrls?.audioUrl;
+        } catch (_e) {}
+      }
+      if (!audioUrl) {
+        try {
+          const pipedUrls = await getUrlsViaPiped(url, 9000, audioItag);
+          audioUrl = pipedUrls?.audioUrl;
+        } catch (_e) {}
+      }
+
       if (!audioUrl) throw new Error('Audio URL not found for MP3 conversion.');
 
       let activeFfmpegPath = ffmpegPath || '';
@@ -327,8 +351,22 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     if (!videoUrl || !audioUrl) {
       const options = getYtdlOptions();
       const info = await ytdl.getInfo(url, options);
-      if (!videoUrl) videoUrl = info.formats.find((f: any) => f.itag === videoItag)?.url;
       if (!audioUrl) audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
+    }
+
+    if (!videoUrl || !audioUrl) {
+      try {
+        const invUrls = await getUrlsViaInvidious(url, videoItag, audioItag);
+        if (!videoUrl) videoUrl = invUrls?.videoUrl;
+        if (!audioUrl) audioUrl = invUrls?.audioUrl;
+      } catch (_e) {}
+    }
+    if (!videoUrl || !audioUrl) {
+      try {
+        const pipedUrls = await getUrlsViaPiped(url, videoItag, audioItag);
+        if (!videoUrl) videoUrl = pipedUrls?.videoUrl;
+        if (!audioUrl) audioUrl = pipedUrls?.audioUrl;
+      } catch (_e) {}
     }
 
     if (!videoUrl || !audioUrl) {
@@ -392,4 +430,163 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
   } catch (error: any) {
     updateJob(jobId, { status: 'error', error: error.message });
   }
+}
+
+async function getMediaUrlViaPiped(url: string, itag: number): Promise<{ downloadUrl: string; filename: string; requiresJob: boolean; videoItag?: number; audioItag?: number } | null> {
+  const pipedInstances = [
+    'https://pipedapi.kavin.rocks',
+    'https://piped-api.garudalinux.org',
+    'https://pipedapi.lunes.host',
+    'https://api.piped.yt'
+  ];
+
+  const videoId = parseYouTubeId(url);
+  if (!videoId) return null;
+
+  const fetchOpts: any = {};
+  if (dispatcher) fetchOpts.dispatcher = dispatcher;
+
+  for (const instance of pipedInstances) {
+    try {
+      console.log(`[MEDIA] Trying Piped fallback via ${instance}...`);
+      const response = await fetch(`${instance}/streams/${videoId}`, fetchOpts);
+      if (response.ok) {
+        const data = await response.json();
+        const safeTitle = (data.title || 'video').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+
+        // Special case: MP3
+        if (itag === 9000) {
+          const audioStreams = data.audioStreams || [];
+          const bestAudio = audioStreams.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+          if (bestAudio && bestAudio.url) {
+            return {
+              downloadUrl: '',
+              filename: `ytclipper_${safeTitle}.mp3`,
+              requiresJob: true,
+              videoItag: 9000,
+              audioItag: bestAudio.itag || 140
+            };
+          }
+        }
+
+        // Search in videoStreams (video or combined)
+        let matchedStream = (data.videoStreams || []).find((s: any) => s.itag === itag);
+        
+        // Search in audioStreams
+        if (!matchedStream) {
+          matchedStream = (data.audioStreams || []).find((s: any) => s.itag === itag);
+        }
+
+        if (matchedStream && matchedStream.url) {
+          console.log(`[MEDIA] Piped fallback succeeded via ${instance}`);
+          const isAudioOnly = matchedStream.videoOnly === false && !matchedStream.height;
+          
+          if (matchedStream.videoOnly) {
+            // Video only stream: needs audio merging!
+            const audioStreams = data.audioStreams || [];
+            const bestAudio = audioStreams.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+            if (bestAudio && bestAudio.itag) {
+              return {
+                downloadUrl: '',
+                filename: `ytclipper_${safeTitle}_${matchedStream.height || itag}p.mp4`,
+                requiresJob: true,
+                videoItag: itag,
+                audioItag: bestAudio.itag
+              };
+            }
+          }
+
+          const ext = isAudioOnly ? 'm4a' : 'mp4';
+          return {
+            downloadUrl: matchedStream.url,
+            filename: `ytclipper_${safeTitle}_${isAudioOnly ? 'audio' : 'video'}.${ext}`,
+            requiresJob: false
+          };
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[MEDIA] Piped instance ${instance} failed:`, e.message);
+    }
+  }
+  return null;
+}
+
+async function getUrlsViaInvidious(url: string, videoItag: number, audioItag: number): Promise<{ videoUrl?: string; audioUrl?: string } | null> {
+  const instances = [
+    'https://vid.puffyan.us',
+    'https://invidious.jing.rocks',
+    'https://inv.tux.pizza',
+    'https://invidious.lunar.icu'
+  ];
+  const videoId = parseYouTubeId(url);
+  if (!videoId) return null;
+
+  const fetchOpts: any = {};
+  if (dispatcher) fetchOpts.dispatcher = dispatcher;
+
+  for (const instance of instances) {
+    try {
+      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, fetchOpts);
+      if (res.ok) {
+        const data = await res.json();
+        let videoUrl: string | undefined;
+        let audioUrl: string | undefined;
+
+        const formats = [...(data.formatStreams || []), ...(data.adaptiveFormats || [])];
+
+        if (videoItag !== 9000) {
+          const vf = formats.find((f: any) => parseInt(f.itag, 10) === videoItag);
+          if (vf?.url) videoUrl = vf.url;
+        }
+
+        const af = formats.find((f: any) => parseInt(f.itag, 10) === audioItag);
+        if (af?.url) audioUrl = af.url;
+
+        if (audioUrl && (videoItag === 9000 || videoUrl)) {
+          return { videoUrl, audioUrl };
+        }
+      }
+    } catch (_e) {}
+  }
+  return null;
+}
+
+async function getUrlsViaPiped(url: string, videoItag: number, audioItag: number): Promise<{ videoUrl?: string; audioUrl?: string } | null> {
+  const pipedInstances = [
+    'https://pipedapi.kavin.rocks',
+    'https://piped-api.garudalinux.org',
+    'https://pipedapi.lunes.host',
+    'https://api.piped.yt'
+  ];
+  const videoId = parseYouTubeId(url);
+  if (!videoId) return null;
+
+  const fetchOpts: any = {};
+  if (dispatcher) fetchOpts.dispatcher = dispatcher;
+
+  for (const instance of pipedInstances) {
+    try {
+      const res = await fetch(`${instance}/streams/${videoId}`, fetchOpts);
+      if (res.ok) {
+        const data = await res.json();
+        let videoUrl: string | undefined;
+        let audioUrl: string | undefined;
+
+        const formats = [...(data.videoStreams || []), ...(data.audioStreams || [])];
+
+        if (videoItag !== 9000) {
+          const vf = formats.find((f: any) => f.itag === videoItag);
+          if (vf?.url) videoUrl = vf.url;
+        }
+
+        const af = formats.find((f: any) => f.itag === audioItag);
+        if (af?.url) audioUrl = af.url;
+
+        if (audioUrl && (videoItag === 9000 || videoUrl)) {
+          return { videoUrl, audioUrl };
+        }
+      }
+    } catch (_e) {}
+  }
+  return null;
 }

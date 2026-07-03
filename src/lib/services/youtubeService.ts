@@ -2,10 +2,11 @@ import { ytdl, getYtdlOptions } from './ytdlAgent';
 import { getVideoInfoDirect } from './directInnerTube';
 import { parseYouTubeUrl } from './youtubeUrlParser';
 import { getVideoInfoViaYtdlp } from './ytdlpService';
-import { ProxyAgent } from 'undici';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
 const proxyUrl = process.env.YOUTUBE_PROXY;
 const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+const activeFetch = dispatcher ? undiciFetch : fetch;
 
 export interface FormatOption {
   itag: number;
@@ -109,7 +110,7 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
       const fetchOpts: any = {};
       if (dispatcher) fetchOpts.dispatcher = dispatcher;
       
-      const apiRes = await fetch(
+      const apiRes = await activeFetch(
         `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${parsed.id}&key=${apiKey}`,
         fetchOpts
       );
@@ -182,7 +183,7 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
     for (const instance of pipedInstances) {
       try {
         console.log(`[META] Trying Piped API fallback via ${instance}...`);
-        const res = await fetch(`${instance}/streams/${parsed.id}`, fetchOpts);
+        const res = await activeFetch(`${instance}/streams/${parsed.id}`, fetchOpts);
         if (res.ok) {
           const data = await res.json();
           if (data.title) {
@@ -261,7 +262,7 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
     const fetchOpts: any = {};
     if (dispatcher) fetchOpts.dispatcher = dispatcher;
     
-    const noembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, fetchOpts);
+    const noembedRes = await activeFetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, fetchOpts);
     if (noembedRes.ok) {
       const noembedData = await noembedRes.json();
       if (!noembedData.error) {
@@ -269,7 +270,7 @@ export async function getVideoMetadata(url: string): Promise<MetadataResult> {
         
         // Fetch exact duration via Lemnos public API
         try {
-          const lemRes = await fetch(`https://yt.lemnoslife.com/noKey/videos?part=contentDetails&id=${parsed.id}`, fetchOpts);
+          const lemRes = await activeFetch(`https://yt.lemnoslife.com/noKey/videos?part=contentDetails&id=${parsed.id}`, fetchOpts);
           if (lemRes.ok) {
             const lemData = await lemRes.json();
             const pt = lemData.items?.[0]?.contentDetails?.duration;

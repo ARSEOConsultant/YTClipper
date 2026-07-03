@@ -1,9 +1,10 @@
 import { ytdl, getYtdlOptions } from './ytdlAgent';
 import { getVideoInfoViaYtdlp } from './ytdlpService';
-import { ProxyAgent } from 'undici';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
 const proxyUrl = process.env.YOUTUBE_PROXY;
 const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+const activeFetch = dispatcher ? undiciFetch : fetch;
 
 // @ts-ignore
 import ffmpegPath from 'ffmpeg-static';
@@ -151,7 +152,7 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
 
       for (const instance of instances) {
         try {
-          const invRes = await fetch(`${instance}/api/v1/videos/${parseYouTubeId(url)}`, fetchOpts);
+          const invRes = await activeFetch(`${instance}/api/v1/videos/${parseYouTubeId(url)}`, fetchOpts);
           if (invRes.ok) {
             const invData = await invRes.json();
             
@@ -236,7 +237,7 @@ async function getMediaUrlViaCobalt(url: string, itag: number): Promise<{ downlo
   for (const instance of cobaltInstances) {
     try {
       console.log(`[MEDIA] Trying Cobalt fallback via ${instance}...`);
-      const response = await fetch(instance, fetchOpts);
+      const response = await activeFetch(instance, fetchOpts);
       if (response.ok) {
         const data = await response.json();
         if (data.url) {
@@ -449,7 +450,7 @@ async function getMediaUrlViaPiped(url: string, itag: number): Promise<{ downloa
   for (const instance of pipedInstances) {
     try {
       console.log(`[MEDIA] Trying Piped fallback via ${instance}...`);
-      const response = await fetch(`${instance}/streams/${videoId}`, fetchOpts);
+      const response = await activeFetch(`${instance}/streams/${videoId}`, fetchOpts);
       if (response.ok) {
         const data = await response.json();
         const safeTitle = (data.title || 'video').replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -526,7 +527,7 @@ async function getUrlsViaInvidious(url: string, videoItag: number, audioItag: nu
 
   for (const instance of instances) {
     try {
-      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, fetchOpts);
+      const res = await activeFetch(`${instance}/api/v1/videos/${videoId}`, fetchOpts);
       if (res.ok) {
         const data = await res.json();
         let videoUrl: string | undefined;
@@ -566,7 +567,7 @@ async function getUrlsViaPiped(url: string, videoItag: number, audioItag: number
 
   for (const instance of pipedInstances) {
     try {
-      const res = await fetch(`${instance}/streams/${videoId}`, fetchOpts);
+      const res = await activeFetch(`${instance}/streams/${videoId}`, fetchOpts);
       if (res.ok) {
         const data = await res.json();
         let videoUrl: string | undefined;

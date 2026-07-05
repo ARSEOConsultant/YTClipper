@@ -110,6 +110,26 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
   }
 }
 
+function getFfmpegPath(): string {
+  // 1. Try system-wide ffmpeg first
+  try {
+    const { execSync } = require('child_process');
+    execSync('ffmpeg -version', { stdio: 'ignore' });
+    return 'ffmpeg';
+  } catch (_) {
+    // 2. Fall back to ffmpeg-static path
+    const activeFfmpegPath = ffmpegPath || '';
+    if (activeFfmpegPath && fs.existsSync(activeFfmpegPath)) {
+      return activeFfmpegPath;
+    }
+    const local = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg');
+    if (fs.existsSync(local)) {
+      return local;
+    }
+    return activeFfmpegPath || 'ffmpeg'; // fallback to command name
+  }
+}
+
 /**
  * Spawns an FFmpeg process to merge the video and audio streams into a temporary file.
  */
@@ -131,11 +151,7 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       }
       if (!audioUrl) throw new Error('Audio URL not found for MP3 conversion.');
 
-      let activeFfmpegPath = ffmpegPath || '';
-      if (!fs.existsSync(activeFfmpegPath)) {
-        const local = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg');
-        if (fs.existsSync(local)) activeFfmpegPath = local;
-      }
+      const activeFfmpegPath = getFfmpegPath();
       const tmpDir = path.join(process.cwd(), 'tmp');
       if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
       const filePath = path.join(tmpDir, `${jobId}_${filename}`);
@@ -145,12 +161,20 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
         '-vn', '-ar', '44100', '-ac', '2', '-b:a', '128k',
         '-f', 'mp3', '-y', filePath,
       ]) as any;
-      ffmpegProcess.on('close', (code: number | null) => {
+
+      let ffmpegStderr = '';
+      ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {
+        ffmpegStderr += chunk.toString();
+      });
+
+      ffmpegProcess.on('close', (code: number | null, signal: string | null) => {
         if (code === 0) {
           updateJob(jobId, { status: 'completed', filePath, filename });
           setTimeout(() => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 15 * 60 * 1000);
         } else {
-          updateJob(jobId, { status: 'error', error: `FFmpeg MP3 conversion failed (code ${code})` });
+          const errorMsg = `FFmpeg MP3 conversion failed (code ${code}, signal ${signal}). Stderr: ${ffmpegStderr.trim()}`;
+          console.error(`[MEDIA] Job ${jobId} error: ${errorMsg}`);
+          updateJob(jobId, { status: 'error', error: errorMsg });
         }
       });
       ffmpegProcess.on('error', (err: Error) => {
@@ -186,18 +210,7 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       throw new Error('Requested formats or URLs not found.');
     }
 
-    let activeFfmpegPath = ffmpegPath || '';
-    const pathExists = activeFfmpegPath ? fs.existsSync(activeFfmpegPath) : false;
-
-    if (!pathExists) {
-      const localFallback = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg');
-      const fallbackExists = fs.existsSync(localFallback);
-      if (fallbackExists) {
-        activeFfmpegPath = localFallback;
-      } else if (!activeFfmpegPath) {
-        throw new Error('ffmpeg-static binary path is not available.');
-      }
-    }
+    const activeFfmpegPath = getFfmpegPath();
 
     // Ensure tmp directory exists
     const tmpDir = path.join(process.cwd(), 'tmp');
@@ -221,7 +234,12 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       filePath
     ]) as any;
 
-    ffmpegProcess.on('close', (code: number | null) => {
+    let ffmpegStderr = '';
+    ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {
+      ffmpegStderr += chunk.toString();
+    });
+
+    ffmpegProcess.on('close', (code: number | null, signal: string | null) => {
       if (code === 0) {
         updateJob(jobId, { status: 'completed', filePath, filename });
         // Auto-delete file after 15 minutes to save disk space
@@ -231,7 +249,9 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
           }
         }, 15 * 60 * 1000);
       } else {
-        updateJob(jobId, { status: 'error', error: `FFmpeg exited with code ${code}` });
+        const errorMsg = `FFmpeg exited with code ${code}, signal ${signal}. Stderr: ${ffmpegStderr.trim()}`;
+        console.error(`[MEDIA] Job ${jobId} error: ${errorMsg}`);
+        updateJob(jobId, { status: 'error', error: errorMsg });
       }
     });
 

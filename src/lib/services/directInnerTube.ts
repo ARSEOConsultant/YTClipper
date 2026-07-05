@@ -8,12 +8,6 @@
  *   authenticated cookie jar to make requests that look like a real browser.
  */
 
-import { ProxyAgent, fetch as undiciFetch } from 'undici';
-
-const proxyUrl = process.env.YOUTUBE_PROXY;
-const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
-const activeFetch = dispatcher ? undiciFetch : fetch;
-
 // @ts-ignore
 const { decipherFormats } = require('ytdl-core-enhanced/lib/innertube-clients');
 // @ts-ignore
@@ -106,10 +100,7 @@ async function fetchWatchPage(videoId: string, cookieString: string): Promise<{
     headers['Cookie'] = cookieString;
   }
 
-  const fetchOpts: any = { headers };
-  if (dispatcher) fetchOpts.dispatcher = dispatcher;
-
-  const res = await activeFetch(url, fetchOpts);
+  const res = await fetch(url, { headers });
   console.log(`[DirectInnerTube] fetchWatchPage status for ${videoId}: ${res.status}`);
   const html = await res.text();
 
@@ -241,14 +232,11 @@ async function requestWebPlayer(
     headers['Cookie'] = cookieString;
   }
 
-  const fetchOpts: any = {
+  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
     method: 'POST',
     headers,
     body: JSON.stringify(requestBody),
-  };
-  if (dispatcher) fetchOpts.dispatcher = dispatcher;
-
-  const res = await activeFetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', fetchOpts);
+  });
 
   return res.json();
 }
@@ -303,14 +291,11 @@ async function requestAndroidPlayer(
     headers['Cookie'] = cookieString;
   }
 
-  const fetchOpts: any = {
+  const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
     method: 'POST',
     headers,
     body: JSON.stringify(requestBody),
-  };
-  if (dispatcher) fetchOpts.dispatcher = dispatcher;
-
-  const res = await activeFetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', fetchOpts);
+  });
 
   return res.json();
 }

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: ytclipper
+    runtime: docker
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: YOUTUBE_COOKIES
+        sync: false
+      - key: YOUTUBE_PROXY
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: "local"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"

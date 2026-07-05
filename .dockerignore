@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.git
+.gitignore
+.env.local
+tmp
+*.js.map
+*.ts.map
+npm-debug.log
+yarn-error.log

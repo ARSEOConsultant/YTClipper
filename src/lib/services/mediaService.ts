@@ -156,11 +156,17 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
       const filePath = path.join(tmpDir, `${jobId}_${filename}`);
 
+      const spawnEnv = { ...process.env };
+      if (process.env.YOUTUBE_PROXY) {
+        spawnEnv.http_proxy = process.env.YOUTUBE_PROXY;
+        spawnEnv.https_proxy = process.env.YOUTUBE_PROXY;
+      }
+
       const ffmpegProcess = spawn(activeFfmpegPath, [
         '-loglevel', 'error', '-i', audioUrl,
         '-vn', '-ar', '44100', '-ac', '2', '-b:a', '128k',
         '-f', 'mp3', '-y', filePath,
-      ]) as any;
+      ], { env: spawnEnv }) as any;
 
       let ffmpegStderr = '';
       ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {
@@ -220,6 +226,12 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
 
     const filePath = path.join(tmpDir, `${jobId}_${filename}`);
 
+    const spawnEnv = { ...process.env };
+    if (process.env.YOUTUBE_PROXY) {
+      spawnEnv.http_proxy = process.env.YOUTUBE_PROXY;
+      spawnEnv.https_proxy = process.env.YOUTUBE_PROXY;
+    }
+
     const ffmpegProcess = spawn(activeFfmpegPath, [
       '-loglevel', 'error',
       '-i', videoUrl,
@@ -232,7 +244,7 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       '-movflags', 'faststart',
       '-y',
       filePath
-    ]) as any;
+    ], { env: spawnEnv }) as any;
 
     let ffmpegStderr = '';
     ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {

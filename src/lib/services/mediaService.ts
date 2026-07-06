@@ -1,5 +1,5 @@
 import { ytdl, getYtdlOptions } from './ytdlAgent';
-import { getVideoInfoViaYtdlp, getStickyProxyUrl } from './ytdlpService';
+import { getVideoInfoViaYtdlp, getStickyProxyUrl, writeCookieFile } from './ytdlpService';
 
 // @ts-ignore
 import ffmpegPath from 'ffmpeg-static';
@@ -159,163 +159,69 @@ function getFfmpegInputOptions(httpHeaders?: Record<string, string>): string[] {
  */
 export async function processMediaJob(jobId: string, url: string, videoItag: number, audioItag: number, filename: string): Promise<void> {
   try {
-    // ── MP3 conversion path (videoItag === 9000) ──
-    if (videoItag === 9000) {
-      let audioUrl: string | undefined;
-      let audioHeaders: Record<string, string> | undefined;
-      let ytdlpInfo: any = null;
-      try {
-        ytdlpInfo = await getVideoInfoViaYtdlp(url);
-        if (ytdlpInfo) {
-          const af = (ytdlpInfo.formats || []).find((f: any) => parseInt(f.format_id, 10) === audioItag && f.url);
-          audioUrl = af?.url;
-          audioHeaders = af?.http_headers || ytdlpInfo.http_headers;
-        }
-      } catch (_e) { /* fall through */ }
-
-      if (!audioUrl) {
-        const options = getYtdlOptions();
-        const info = await ytdl.getInfo(url, options);
-        audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
-      }
-      if (!audioUrl) throw new Error('Audio URL not found for MP3 conversion.');
-
-      const activeFfmpegPath = getFfmpegPath();
-      const tmpDir = path.join(process.cwd(), 'tmp');
-      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-      const filePath = path.join(tmpDir, `${jobId}_${filename}`);
-
-      const spawnEnv = { ...process.env };
-      const proxySessionId = ytdlpInfo?.proxySessionId;
-      const proxyToUse = proxySessionId ? getStickyProxyUrl(proxySessionId) : process.env.YOUTUBE_PROXY;
-      if (proxyToUse) {
-        spawnEnv.http_proxy = proxyToUse;
-        spawnEnv.https_proxy = proxyToUse;
-        spawnEnv.HTTP_PROXY = proxyToUse;
-        spawnEnv.HTTPS_PROXY = proxyToUse;
-      }
-
-      const ffmpegArgs: string[] = ['-loglevel', 'error'];
-      const audioInputOpts = getFfmpegInputOptions(audioHeaders);
-      ffmpegArgs.push(...audioInputOpts);
-      ffmpegArgs.push('-i', audioUrl);
-      ffmpegArgs.push(
-        '-vn', '-ar', '44100', '-ac', '2', '-b:a', '128k',
-        '-f', 'mp3', '-y', filePath
-      );
-
-      const ffmpegProcess = spawn(activeFfmpegPath, ffmpegArgs, { env: spawnEnv }) as any;
-
-      let ffmpegStderr = '';
-      ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {
-        ffmpegStderr += chunk.toString();
-      });
-
-      ffmpegProcess.on('close', (code: number | null, signal: string | null) => {
-        if (code === 0) {
-          updateJob(jobId, { status: 'completed', filePath, filename });
-          setTimeout(() => { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 15 * 60 * 1000);
-        } else {
-          const errorMsg = `FFmpeg MP3 conversion failed (code ${code}, signal ${signal}). Stderr: ${ffmpegStderr.trim()}`;
-          console.error(`[MEDIA] Job ${jobId} error: ${errorMsg}`);
-          updateJob(jobId, { status: 'error', error: errorMsg });
-        }
-      });
-      ffmpegProcess.on('error', (err: Error) => {
-        updateJob(jobId, { status: 'error', error: 'Failed to spawn FFmpeg for MP3' });
-      });
-      return;
-    }
-
-    let videoUrl: string | undefined;
-    let audioUrl: string | undefined;
-    let videoHeaders: Record<string, string> | undefined;
-    let audioHeaders: Record<string, string> | undefined;
-    let ytdlpInfo: any = null;
-
-    // Try yt-dlp first
-    try {
-      ytdlpInfo = await getVideoInfoViaYtdlp(url);
-      if (ytdlpInfo) {
-        const fmts = (ytdlpInfo.formats || []).filter((f: any) => f.url);
-        const vf = fmts.find((f: any) => parseInt(f.format_id, 10) === videoItag);
-        const af = fmts.find((f: any) => parseInt(f.format_id, 10) === audioItag);
-        if (vf?.url) {
-          videoUrl = vf.url;
-          videoHeaders = vf.http_headers || ytdlpInfo.http_headers;
-        }
-        if (af?.url) {
-          audioUrl = af.url;
-          audioHeaders = af.http_headers || ytdlpInfo.http_headers;
-        }
-      }
-    } catch (_e) { /* fall through */ }
-
-    // Fallback to ytdl for any missing URLs
-    if (!videoUrl || !audioUrl) {
-      const options = getYtdlOptions();
-      const info = await ytdl.getInfo(url, options);
-      if (!videoUrl) videoUrl = info.formats.find((f: any) => f.itag === videoItag)?.url;
-      if (!audioUrl) audioUrl = info.formats.find((f: any) => f.itag === audioItag)?.url;
-    }
-
-    if (!videoUrl || !audioUrl) {
-      throw new Error('Requested formats or URLs not found.');
-    }
-
     const activeFfmpegPath = getFfmpegPath();
-
-    // Ensure tmp directory exists
     const tmpDir = path.join(process.cwd(), 'tmp');
     if (!fs.existsSync(tmpDir)) {
       fs.mkdirSync(tmpDir, { recursive: true });
     }
-
     const filePath = path.join(tmpDir, `${jobId}_${filename}`);
 
-    const spawnEnv = { ...process.env };
+    const cookieFile = writeCookieFile();
+    let ytdlpInfo: any = null;
+    try {
+      ytdlpInfo = await getVideoInfoViaYtdlp(url);
+    } catch (_) {}
+
     const proxySessionId = ytdlpInfo?.proxySessionId;
     const proxyToUse = proxySessionId ? getStickyProxyUrl(proxySessionId) : process.env.YOUTUBE_PROXY;
+
+    const args = [
+      '-m', 'yt_dlp',
+      '--ffmpeg-location', activeFfmpegPath,
+      '--no-warnings',
+      '--quiet',
+      '--retries', '10',
+      '--fragment-retries', '10',
+    ];
+
+    if (cookieFile) {
+      args.push('--cookies', cookieFile);
+    }
     if (proxyToUse) {
-      spawnEnv.http_proxy = proxyToUse;
-      spawnEnv.https_proxy = proxyToUse;
-      spawnEnv.HTTP_PROXY = proxyToUse;
-      spawnEnv.HTTPS_PROXY = proxyToUse;
+      args.push('--proxy', proxyToUse);
     }
 
-    const ffmpegArgs: string[] = ['-loglevel', 'error'];
+    if (videoItag === 9000) {
+      // MP3 conversion
+      args.push(
+        '-f', String(audioItag),
+        '-x',
+        '--audio-format', 'mp3',
+        '--audio-quality', '128k',
+        '-o', filePath,
+        url
+      );
+    } else {
+      // Video + Audio merge
+      args.push(
+        '-f', `${videoItag}+${audioItag}`,
+        '--merge-output-format', 'mp4',
+        '-o', filePath,
+        url
+      );
+    }
 
-    // Video input
-    const videoInputOpts = getFfmpegInputOptions(videoHeaders);
-    ffmpegArgs.push(...videoInputOpts);
-    ffmpegArgs.push('-i', videoUrl);
+    console.log(`[MEDIA] Spawning yt-dlp downloader: python3 ${args.join(' ')}`);
+    const proc = spawn('python3', args);
 
-    // Audio input
-    const audioInputOpts = getFfmpegInputOptions(audioHeaders);
-    ffmpegArgs.push(...audioInputOpts);
-    ffmpegArgs.push('-i', audioUrl);
-
-    // Output settings
-    ffmpegArgs.push(
-      '-c:v', 'copy',
-      '-c:a', 'aac',
-      '-map', '0:v:0',
-      '-map', '1:a:0',
-      '-f', 'mp4',
-      '-movflags', 'faststart',
-      '-y',
-      filePath
-    );
-
-    const ffmpegProcess = spawn(activeFfmpegPath, ffmpegArgs, { env: spawnEnv }) as any;
-
-    let ffmpegStderr = '';
-    ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {
-      ffmpegStderr += chunk.toString();
+    let stderr = '';
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
     });
 
-    ffmpegProcess.on('close', (code: number | null, signal: string | null) => {
+    proc.on('close', (code: number | null) => {
       if (code === 0) {
+        console.log(`[MEDIA] Job ${jobId} completed successfully.`);
         updateJob(jobId, { status: 'completed', filePath, filename });
         // Auto-delete file after 15 minutes to save disk space
         setTimeout(() => {
@@ -324,18 +230,19 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
           }
         }, 15 * 60 * 1000);
       } else {
-        const errorMsg = `FFmpeg exited with code ${code}, signal ${signal}. Stderr: ${ffmpegStderr.trim()}`;
+        const errorMsg = `yt-dlp downloader exited with code ${code}. Stderr: ${stderr.trim()}`;
         console.error(`[MEDIA] Job ${jobId} error: ${errorMsg}`);
         updateJob(jobId, { status: 'error', error: errorMsg });
       }
     });
 
-    ffmpegProcess.on('error', (err: Error) => {
-      console.error('Failed to spawn FFmpeg process:', err);
-      updateJob(jobId, { status: 'error', error: 'Failed to spawn FFmpeg' });
+    proc.on('error', (err: Error) => {
+      console.error(`[MEDIA] Job ${jobId} spawn error:`, err);
+      updateJob(jobId, { status: 'error', error: 'Failed to spawn yt-dlp downloader' });
     });
 
   } catch (error: any) {
-    updateJob(jobId, { status: 'error', error: error.message });
+    console.error(`[MEDIA] Job ${jobId} exception:`, error);
+    updateJob(jobId, { status: 'error', error: error.message || 'Internal Server Error' });
   }
 }

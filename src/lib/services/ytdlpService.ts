@@ -23,7 +23,7 @@ function setCache(videoId: string, data: YtdlpInfo): void {
   metadataCache.set(videoId, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
-function writeCookieFile(): string {
+export function writeCookieFile(): string {
   if (cookieFileWritten) return COOKIE_FILE;
 
   const cookiesStr = process.env.YOUTUBE_COOKIES;

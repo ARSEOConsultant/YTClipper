@@ -131,6 +131,7 @@ export default function YouTubeTranscriptDownloaderPage() {
       transcriptExample={true}
       finalCta={finalCta}
       defaultFormat="transcript"
+      transcriptOnly={true}
     />
   );
 }

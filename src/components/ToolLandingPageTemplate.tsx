@@ -29,6 +29,7 @@ interface ToolLandingPageTemplateProps {
   audioOnly?: boolean;
   videoOnly?: boolean;
   hideTranscript?: boolean;
+  transcriptOnly?: boolean;
   reasons?: { title: string; description: string }[];
   // NEW props for finalized copy layout sections
   howItWorks?: string[];
@@ -69,6 +70,7 @@ export default function ToolLandingPageTemplate({
   audioOnly = false,
   videoOnly = false,
   hideTranscript = false,
+  transcriptOnly = false,
   reasons,
   howItWorks,
   perfectFor,
@@ -275,6 +277,7 @@ export default function ToolLandingPageTemplate({
                       onDownloadTranscript={() => handleTranscriptDownload(url)}
                       isLoading={isProcessing} 
                       hideTranscript={hideTranscript}
+                      transcriptOnly={transcriptOnly}
                     />
                   )
                 )}

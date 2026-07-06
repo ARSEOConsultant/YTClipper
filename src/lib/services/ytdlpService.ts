@@ -78,6 +78,7 @@ export interface YtdlpFormat {
   quality?: number;
   filesize?: number;
   filesize_approx?: number;
+  http_headers?: Record<string, string>;
 }
 
 export interface YtdlpInfo {
@@ -89,6 +90,7 @@ export interface YtdlpInfo {
   thumbnail?: string;
   duration?: number;
   formats: YtdlpFormat[];
+  http_headers?: Record<string, string>;
 }
 
 export interface YtdlpDownloadFormat {

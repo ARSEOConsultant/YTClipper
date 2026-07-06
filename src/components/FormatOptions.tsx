@@ -8,9 +8,16 @@ interface FormatOptionsProps {
   onDownloadMedia: (itag: number) => void;
   onDownloadTranscript: () => void;
   isLoading: boolean;
+  hideTranscript?: boolean;
 }
 
-export default function FormatOptions({ formats, onDownloadMedia, onDownloadTranscript, isLoading }: FormatOptionsProps) {
+export default function FormatOptions({ 
+  formats, 
+  onDownloadMedia, 
+  onDownloadTranscript, 
+  isLoading,
+  hideTranscript = false 
+}: FormatOptionsProps) {
   const [selectedItag, setSelectedItag] = useState<number>(formats[0]?.itag || 0);
 
   // Update selected if formats change
@@ -58,17 +65,19 @@ export default function FormatOptions({ formats, onDownloadMedia, onDownloadTran
       </div>
 
       {/* Transcript Section */}
-      <div className="sm:w-auto">
-        <Button
-          variant="outline"
-          className="w-full sm:w-auto h-12 px-6 rounded-xl text-zinc-600 hover:text-zinc-900 transition-colors"
-          onClick={onDownloadTranscript}
-          disabled={isLoading}
-        >
-          <FileText className="w-5 h-5 mr-2 text-amber-500" />
-          Get Transcript
-        </Button>
-      </div>
+      {!hideTranscript && (
+        <div className="sm:w-auto">
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto h-12 px-6 rounded-xl text-zinc-600 hover:text-zinc-900 transition-colors"
+            onClick={onDownloadTranscript}
+            disabled={isLoading}
+          >
+            <FileText className="w-5 h-5 mr-2 text-amber-500" />
+            Get Transcript
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -131,6 +131,7 @@ export default function YouTubeShortsDownloaderPage() {
       noticeText={noticeText}
       finalCta={finalCta}
       defaultFormat="mp4"
+      hideTranscript={true}
     />
   );
 }

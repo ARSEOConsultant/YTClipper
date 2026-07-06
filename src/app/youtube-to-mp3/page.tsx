@@ -135,6 +135,7 @@ export default function YouTubeToMp3Page() {
       finalCta={finalCta}
       defaultFormat="mp3"
       audioOnly={true}
+      hideTranscript={true}
     />
   );
 }

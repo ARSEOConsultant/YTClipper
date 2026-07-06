@@ -109,6 +109,8 @@ export default function Home() {
       perfectFor={perfectFor}
       comparison={comparison}
       finalCta={finalCta}
+      videoOnly={true}
+      hideTranscript={true}
     />
   );
 }

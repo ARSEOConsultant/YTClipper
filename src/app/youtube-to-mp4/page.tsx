@@ -99,6 +99,8 @@ export default function YouTubeToMp4Page() {
       perfectFor={perfectFor}
       finalCta={finalCta}
       defaultFormat="mp4"
+      videoOnly={true}
+      hideTranscript={true}
     />
   );
 }

@@ -27,6 +27,8 @@ interface ToolLandingPageTemplateProps {
   defaultFormat?: 'mp4' | 'mp3' | 'transcript';
   hideFormatSelection?: boolean;
   audioOnly?: boolean;
+  videoOnly?: boolean;
+  hideTranscript?: boolean;
   reasons?: { title: string; description: string }[];
   // NEW props for finalized copy layout sections
   howItWorks?: string[];
@@ -65,6 +67,8 @@ export default function ToolLandingPageTemplate({
   defaultFormat,
   hideFormatSelection = false,
   audioOnly = false,
+  videoOnly = false,
+  hideTranscript = false,
   reasons,
   howItWorks,
   perfectFor,
@@ -260,10 +264,17 @@ export default function ToolLandingPageTemplate({
                 ) : (
                   !hideFormatSelection && (
                     <FormatOptions
-                      formats={audioOnly ? metadata.availableFormats.filter(f => f.type === 'audio') : metadata.availableFormats}
+                      formats={
+                        audioOnly
+                          ? metadata.availableFormats.filter(f => f.type === 'audio')
+                          : videoOnly
+                            ? metadata.availableFormats.filter(f => f.type === 'video')
+                            : metadata.availableFormats
+                      }
                       onDownloadMedia={(itag) => handleMediaDownload(itag, url)} 
                       onDownloadTranscript={() => handleTranscriptDownload(url)}
                       isLoading={isProcessing} 
+                      hideTranscript={hideTranscript}
                     />
                   )
                 )}

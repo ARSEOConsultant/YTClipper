@@ -79,10 +79,14 @@ export function getStickyProxyUrl(sessionId: string): string | undefined {
   if (proxyUrl.includes('iproyal.com')) {
     try {
       const url = new URL(proxyUrl);
-      if (!url.password.includes('_session-')) {
+      // Only append sticky session parameters if using the default rotating port (12321).
+      // If the user has configured a custom sticky port (e.g. 10001-14999), do not modify the password.
+      if (url.port === '12321' && !url.password.includes('_session-')) {
         url.password = `${url.password}_session-${sessionId}_lifetime-10m`;
       }
-      return url.toString();
+      const result = url.toString();
+      // Remove trailing slash to prevent python/yt-dlp parsing failures
+      return result.endsWith('/') ? result.slice(0, -1) : result;
     } catch (e) {
       console.error('[proxy] Error constructing sticky proxy URL:', e);
       return proxyUrl;
@@ -198,54 +202,70 @@ export async function getVideoInfoViaYtdlp(url: string, forceSessionId?: string)
   const sessionId = forceSessionId || generateSessionId();
   const proxyToUse = getStickyProxyUrl(sessionId);
 
-  return new Promise((resolve) => {
-    const args = [
-      '-m', 'yt_dlp',
-      '--extractor-args', 'youtube:player_client=android_vr',
-      '-j',
-      '--no-download',
-      '--no-warnings',
-      '--quiet',
-      '--retries', '10',
-      '--fragment-retries', '10',
-    ];
+  const runYtdlp = (useProxy: boolean): Promise<YtdlpInfo | null> => {
+    return new Promise((resolve) => {
+      const args = [
+        '-m', 'yt_dlp',
+        '--extractor-args', 'youtube:player_client=android_vr',
+        '-j',
+        '--no-download',
+        '--no-warnings',
+        '--quiet',
+        '--retries', '10',
+        '--fragment-retries', '10',
+      ];
 
-    if (cookieFile) args.push('--cookies', cookieFile);
-    if (proxyToUse) {
-      args.push('--proxy', proxyToUse);
-    }
-    args.push(url);
-
-    console.log(`[yt-dlp] Spawning: python3 ${args.join(' ')}`);
-
-    const proc = spawn('python3', args, { timeout: 25000 });
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', (d: Buffer) => stdout += d.toString());
-    proc.stderr.on('data', (d: Buffer) => stderr += d.toString());
-
-    proc.on('close', (code: number | null) => {
-      console.log(`[yt-dlp] process exited with code ${code}`);
-      if (code !== 0 || !stdout.trim()) {
-        console.error(`[yt-dlp] failed with code ${code}. Stderr: ${stderr.trim()}`);
-        resolve(null);
-        return;
+      if (cookieFile) args.push('--cookies', cookieFile);
+      if (useProxy && proxyToUse) {
+        args.push('--proxy', proxyToUse);
       }
-      try {
-        const data = JSON.parse(stdout.trim()) as YtdlpInfo;
-        data.proxySessionId = sessionId;
-        if (videoId) setCache(videoId, data);
-        resolve(data);
-      } catch (e: any) {
-        console.error('[yt-dlp] JSON parse error on stdout:', e.message, 'Stdout preview:', stdout.slice(0, 200));
-        resolve(null);
-      }
-    });
+      args.push(url);
 
-    proc.on('error', (err: any) => {
-      console.error('[yt-dlp] Process spawn error (is python3 installed?):', err.message || err, err);
-      resolve(null);
+      console.log(`[yt-dlp] Spawning (proxy=${useProxy}): python3 ${args.join(' ')}`);
+
+      const proc = spawn('python3', args, { timeout: 25000 });
+      let stdout = '';
+      let stderr = '';
+
+      proc.stdout.on('data', (d: Buffer) => stdout += d.toString());
+      proc.stderr.on('data', (d: Buffer) => stderr += d.toString());
+
+      proc.on('close', (code: number | null) => {
+        console.log(`[yt-dlp] process exited with code ${code}`);
+        if (code !== 0 || !stdout.trim()) {
+          console.error(`[yt-dlp] failed (proxy=${useProxy}) with code ${code}. Stderr: ${stderr.trim()}`);
+          resolve(null);
+          return;
+        }
+        try {
+          const data = JSON.parse(stdout.trim()) as YtdlpInfo;
+          data.proxySessionId = sessionId;
+          resolve(data);
+        } catch (e: any) {
+          console.error('[yt-dlp] JSON parse error on stdout:', e.message, 'Stdout preview:', stdout.slice(0, 200));
+          resolve(null);
+        }
+      });
+
+      proc.on('error', (err: any) => {
+        console.error('[yt-dlp] Process spawn error:', err.message || err, err);
+        resolve(null);
+      });
     });
-  });
+  };
+
+  // Attempt 1: Try with proxy (if configured)
+  let result = await runYtdlp(true);
+  
+  // Attempt 2: Fallback to no proxy if attempt 1 failed and proxy was used
+  if (!result && proxyToUse) {
+    console.log('[yt-dlp] Proxy attempt failed. Retrying WITHOUT proxy...');
+    result = await runYtdlp(false);
+  }
+
+  if (result && videoId) {
+    setCache(videoId, result);
+  }
+
+  return result;
 }

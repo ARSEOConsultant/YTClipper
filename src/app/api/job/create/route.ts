@@ -42,8 +42,11 @@ export async function POST(req: Request) {
     }
 
     // Direct download (audio only or pre-merged SD formats)
+    const videoId = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/]+)/)?.[1] || '';
+    const streamDownloadUrl = `/api/download/stream?videoId=${videoId}&itag=${itag}&filename=${encodeURIComponent(result.filename)}`;
+
     return NextResponse.json({
-      downloadUrl: result.downloadUrl,
+      downloadUrl: streamDownloadUrl,
       filename: result.filename,
       requiresJob: false
     });

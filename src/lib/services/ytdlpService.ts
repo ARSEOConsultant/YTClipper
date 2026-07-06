@@ -63,6 +63,35 @@ function writeCookieFile(): string {
   }
 }
 
+export function generateSessionId(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+export function getStickyProxyUrl(sessionId: string): string | undefined {
+  const proxyUrl = process.env.YOUTUBE_PROXY;
+  if (!proxyUrl) return undefined;
+
+  if (proxyUrl.includes('iproyal.com')) {
+    try {
+      const url = new URL(proxyUrl);
+      if (!url.password.includes('_session-')) {
+        url.password = `${url.password}_session-${sessionId}_lifetime-10m`;
+      }
+      return url.toString();
+    } catch (e) {
+      console.error('[proxy] Error constructing sticky proxy URL:', e);
+      return proxyUrl;
+    }
+  }
+
+  return proxyUrl;
+}
+
 export interface YtdlpFormat {
   format_id: string;
   ext: string;
@@ -91,6 +120,7 @@ export interface YtdlpInfo {
   duration?: number;
   formats: YtdlpFormat[];
   http_headers?: Record<string, string>;
+  proxySessionId?: string;
 }
 
 export interface YtdlpDownloadFormat {
@@ -151,7 +181,7 @@ if (typeof window === 'undefined') {
   } catch (_) {}
 }
 
-export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | null> {
+export async function getVideoInfoViaYtdlp(url: string, forceSessionId?: string): Promise<YtdlpInfo | null> {
   // Extract video ID for cache key
   const idMatch = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/]+)/);
   const videoId = idMatch?.[1];
@@ -165,6 +195,8 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
   }
 
   const cookieFile = writeCookieFile();
+  const sessionId = forceSessionId || generateSessionId();
+  const proxyToUse = getStickyProxyUrl(sessionId);
 
   return new Promise((resolve) => {
     const args = [
@@ -179,8 +211,8 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
     ];
 
     if (cookieFile) args.push('--cookies', cookieFile);
-    if (process.env.YOUTUBE_PROXY) {
-      args.push('--proxy', process.env.YOUTUBE_PROXY);
+    if (proxyToUse) {
+      args.push('--proxy', proxyToUse);
     }
     args.push(url);
 
@@ -202,6 +234,7 @@ export async function getVideoInfoViaYtdlp(url: string): Promise<YtdlpInfo | nul
       }
       try {
         const data = JSON.parse(stdout.trim()) as YtdlpInfo;
+        data.proxySessionId = sessionId;
         if (videoId) setCache(videoId, data);
         resolve(data);
       } catch (e: any) {

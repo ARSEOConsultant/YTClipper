@@ -1,5 +1,5 @@
 import { ytdl, getYtdlOptions } from './ytdlAgent';
-import { getVideoInfoViaYtdlp } from './ytdlpService';
+import { getVideoInfoViaYtdlp, getStickyProxyUrl } from './ytdlpService';
 
 // @ts-ignore
 import ffmpegPath from 'ffmpeg-static';
@@ -163,8 +163,9 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     if (videoItag === 9000) {
       let audioUrl: string | undefined;
       let audioHeaders: Record<string, string> | undefined;
+      let ytdlpInfo: any = null;
       try {
-        const ytdlpInfo = await getVideoInfoViaYtdlp(url);
+        ytdlpInfo = await getVideoInfoViaYtdlp(url);
         if (ytdlpInfo) {
           const af = (ytdlpInfo.formats || []).find((f: any) => parseInt(f.format_id, 10) === audioItag && f.url);
           audioUrl = af?.url;
@@ -185,11 +186,13 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       const filePath = path.join(tmpDir, `${jobId}_${filename}`);
 
       const spawnEnv = { ...process.env };
-      if (process.env.YOUTUBE_PROXY) {
-        spawnEnv.http_proxy = process.env.YOUTUBE_PROXY;
-        spawnEnv.https_proxy = process.env.YOUTUBE_PROXY;
-        spawnEnv.HTTP_PROXY = process.env.YOUTUBE_PROXY;
-        spawnEnv.HTTPS_PROXY = process.env.YOUTUBE_PROXY;
+      const proxySessionId = ytdlpInfo?.proxySessionId;
+      const proxyToUse = proxySessionId ? getStickyProxyUrl(proxySessionId) : process.env.YOUTUBE_PROXY;
+      if (proxyToUse) {
+        spawnEnv.http_proxy = proxyToUse;
+        spawnEnv.https_proxy = proxyToUse;
+        spawnEnv.HTTP_PROXY = proxyToUse;
+        spawnEnv.HTTPS_PROXY = proxyToUse;
       }
 
       const ffmpegArgs: string[] = ['-loglevel', 'error'];
@@ -228,10 +231,11 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     let audioUrl: string | undefined;
     let videoHeaders: Record<string, string> | undefined;
     let audioHeaders: Record<string, string> | undefined;
+    let ytdlpInfo: any = null;
 
     // Try yt-dlp first
     try {
-      const ytdlpInfo = await getVideoInfoViaYtdlp(url);
+      ytdlpInfo = await getVideoInfoViaYtdlp(url);
       if (ytdlpInfo) {
         const fmts = (ytdlpInfo.formats || []).filter((f: any) => f.url);
         const vf = fmts.find((f: any) => parseInt(f.format_id, 10) === videoItag);
@@ -270,11 +274,13 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     const filePath = path.join(tmpDir, `${jobId}_${filename}`);
 
     const spawnEnv = { ...process.env };
-    if (process.env.YOUTUBE_PROXY) {
-      spawnEnv.http_proxy = process.env.YOUTUBE_PROXY;
-      spawnEnv.https_proxy = process.env.YOUTUBE_PROXY;
-      spawnEnv.HTTP_PROXY = process.env.YOUTUBE_PROXY;
-      spawnEnv.HTTPS_PROXY = process.env.YOUTUBE_PROXY;
+    const proxySessionId = ytdlpInfo?.proxySessionId;
+    const proxyToUse = proxySessionId ? getStickyProxyUrl(proxySessionId) : process.env.YOUTUBE_PROXY;
+    if (proxyToUse) {
+      spawnEnv.http_proxy = proxyToUse;
+      spawnEnv.https_proxy = proxyToUse;
+      spawnEnv.HTTP_PROXY = proxyToUse;
+      spawnEnv.HTTPS_PROXY = proxyToUse;
     }
 
     const ffmpegArgs: string[] = ['-loglevel', 'error'];

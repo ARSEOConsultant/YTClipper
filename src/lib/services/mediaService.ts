@@ -9,6 +9,7 @@ import { spawn } from 'child_process';
 import { updateJob } from './jobService';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 /**
  * Gets the direct download URL or dynamic streaming URL for a specific YouTube video format.
@@ -116,7 +117,7 @@ function getFfmpegLocation(): string {
     '/opt/homebrew/bin',
     '/usr/local/bin',
     '/usr/bin',
-    path.join(process.env.HOME || '', '.local/bin'),
+    path.join(os.homedir(), '.local/bin'),
   ];
 
   for (const dir of commonDirs) {
@@ -223,7 +224,7 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     const extraPaths = [
       '/opt/homebrew/bin',
       '/usr/local/bin',
-      path.join(process.env.HOME || '', '.local/bin'),
+      path.join(os.homedir(), '.local/bin'),
     ].filter(fs.existsSync);
     if (extraPaths.length > 0) {
       spawnEnv.PATH = `${extraPaths.join(':')}:${process.env.PATH || ''}`;

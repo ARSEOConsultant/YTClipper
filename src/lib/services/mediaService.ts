@@ -110,24 +110,32 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
   }
 }
 
-function getFfmpegPath(): string {
-  // 1. Try system-wide ffmpeg first
-  try {
-    const { execSync } = require('child_process');
-    execSync('ffmpeg -version', { stdio: 'ignore' });
-    return 'ffmpeg';
-  } catch (_) {
-    // 2. Fall back to ffmpeg-static path
-    const activeFfmpegPath = ffmpegPath || '';
-    if (activeFfmpegPath && fs.existsSync(activeFfmpegPath)) {
-      return activeFfmpegPath;
+function getFfmpegLocation(): string {
+  // Check common directories where ffmpeg and ffprobe coexist
+  const commonDirs = [
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/bin',
+    path.join(process.env.HOME || '', '.local/bin'),
+  ];
+
+  for (const dir of commonDirs) {
+    if (fs.existsSync(path.join(dir, 'ffmpeg')) && fs.existsSync(path.join(dir, 'ffprobe'))) {
+      console.log(`[MEDIA] Found ffmpeg and ffprobe coexisting in: ${dir}`);
+      return dir;
     }
-    const local = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg');
-    if (fs.existsSync(local)) {
-      return local;
-    }
-    return activeFfmpegPath || 'ffmpeg'; // fallback to command name
   }
+
+  // Fallback to ffmpeg-static path
+  const activeFfmpegPath = ffmpegPath || '';
+  if (activeFfmpegPath && fs.existsSync(activeFfmpegPath)) {
+    return activeFfmpegPath;
+  }
+  const local = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg');
+  if (fs.existsSync(local)) {
+    return local;
+  }
+  return 'ffmpeg';
 }
 
 function getFfmpegInputOptions(httpHeaders?: Record<string, string>): string[] {
@@ -159,7 +167,7 @@ function getFfmpegInputOptions(httpHeaders?: Record<string, string>): string[] {
  */
 export async function processMediaJob(jobId: string, url: string, videoItag: number, audioItag: number, filename: string): Promise<void> {
   try {
-    const activeFfmpegPath = getFfmpegPath();
+    const activeFfmpegPath = getFfmpegLocation();
     const tmpDir = path.join(process.cwd(), 'tmp');
     if (!fs.existsSync(tmpDir)) {
       fs.mkdirSync(tmpDir, { recursive: true });
@@ -211,8 +219,18 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       );
     }
 
+    const spawnEnv = { ...process.env };
+    const extraPaths = [
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      path.join(process.env.HOME || '', '.local/bin'),
+    ].filter(fs.existsSync);
+    if (extraPaths.length > 0) {
+      spawnEnv.PATH = `${extraPaths.join(':')}:${process.env.PATH || ''}`;
+    }
+
     console.log(`[MEDIA] Spawning yt-dlp downloader: python3 ${args.join(' ')}`);
-    const proc = spawn('python3', args);
+    const proc = spawn('python3', args, { env: spawnEnv });
 
     let stderr = '';
     proc.stderr?.on('data', (chunk: Buffer) => {

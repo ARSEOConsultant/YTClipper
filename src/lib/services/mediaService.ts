@@ -130,6 +130,30 @@ function getFfmpegPath(): string {
   }
 }
 
+function getFfmpegInputOptions(httpHeaders?: Record<string, string>): string[] {
+  const options: string[] = [];
+  if (!httpHeaders) return options;
+
+  let userAgent = '';
+  let otherHeadersStr = '';
+
+  for (const [key, val] of Object.entries(httpHeaders)) {
+    if (key.toLowerCase() === 'user-agent') {
+      userAgent = val;
+    } else {
+      otherHeadersStr += `${key}: ${val}\r\n`;
+    }
+  }
+
+  if (userAgent) {
+    options.push('-user_agent', userAgent);
+  }
+  if (otherHeadersStr) {
+    options.push('-headers', otherHeadersStr);
+  }
+  return options;
+}
+
 /**
  * Spawns an FFmpeg process to merge the video and audio streams into a temporary file.
  */
@@ -138,10 +162,14 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     // ── MP3 conversion path (videoItag === 9000) ──
     if (videoItag === 9000) {
       let audioUrl: string | undefined;
+      let audioHeaders: Record<string, string> | undefined;
       try {
         const ytdlpInfo = await getVideoInfoViaYtdlp(url);
-        const af = (ytdlpInfo?.formats || []).find((f: any) => parseInt(f.format_id, 10) === audioItag && f.url);
-        audioUrl = af?.url;
+        if (ytdlpInfo) {
+          const af = (ytdlpInfo.formats || []).find((f: any) => parseInt(f.format_id, 10) === audioItag && f.url);
+          audioUrl = af?.url;
+          audioHeaders = af?.http_headers || ytdlpInfo.http_headers;
+        }
       } catch (_e) { /* fall through */ }
 
       if (!audioUrl) {
@@ -160,13 +188,20 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       if (process.env.YOUTUBE_PROXY) {
         spawnEnv.http_proxy = process.env.YOUTUBE_PROXY;
         spawnEnv.https_proxy = process.env.YOUTUBE_PROXY;
+        spawnEnv.HTTP_PROXY = process.env.YOUTUBE_PROXY;
+        spawnEnv.HTTPS_PROXY = process.env.YOUTUBE_PROXY;
       }
 
-      const ffmpegProcess = spawn(activeFfmpegPath, [
-        '-loglevel', 'error', '-i', audioUrl,
+      const ffmpegArgs: string[] = ['-loglevel', 'error'];
+      const audioInputOpts = getFfmpegInputOptions(audioHeaders);
+      ffmpegArgs.push(...audioInputOpts);
+      ffmpegArgs.push('-i', audioUrl);
+      ffmpegArgs.push(
         '-vn', '-ar', '44100', '-ac', '2', '-b:a', '128k',
-        '-f', 'mp3', '-y', filePath,
-      ], { env: spawnEnv }) as any;
+        '-f', 'mp3', '-y', filePath
+      );
+
+      const ffmpegProcess = spawn(activeFfmpegPath, ffmpegArgs, { env: spawnEnv }) as any;
 
       let ffmpegStderr = '';
       ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {
@@ -191,6 +226,8 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
 
     let videoUrl: string | undefined;
     let audioUrl: string | undefined;
+    let videoHeaders: Record<string, string> | undefined;
+    let audioHeaders: Record<string, string> | undefined;
 
     // Try yt-dlp first
     try {
@@ -199,8 +236,14 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
         const fmts = (ytdlpInfo.formats || []).filter((f: any) => f.url);
         const vf = fmts.find((f: any) => parseInt(f.format_id, 10) === videoItag);
         const af = fmts.find((f: any) => parseInt(f.format_id, 10) === audioItag);
-        if (vf?.url) videoUrl = vf.url;
-        if (af?.url) audioUrl = af.url;
+        if (vf?.url) {
+          videoUrl = vf.url;
+          videoHeaders = vf.http_headers || ytdlpInfo.http_headers;
+        }
+        if (af?.url) {
+          audioUrl = af.url;
+          audioHeaders = af.http_headers || ytdlpInfo.http_headers;
+        }
       }
     } catch (_e) { /* fall through */ }
 
@@ -230,12 +273,24 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     if (process.env.YOUTUBE_PROXY) {
       spawnEnv.http_proxy = process.env.YOUTUBE_PROXY;
       spawnEnv.https_proxy = process.env.YOUTUBE_PROXY;
+      spawnEnv.HTTP_PROXY = process.env.YOUTUBE_PROXY;
+      spawnEnv.HTTPS_PROXY = process.env.YOUTUBE_PROXY;
     }
 
-    const ffmpegProcess = spawn(activeFfmpegPath, [
-      '-loglevel', 'error',
-      '-i', videoUrl,
-      '-i', audioUrl,
+    const ffmpegArgs: string[] = ['-loglevel', 'error'];
+
+    // Video input
+    const videoInputOpts = getFfmpegInputOptions(videoHeaders);
+    ffmpegArgs.push(...videoInputOpts);
+    ffmpegArgs.push('-i', videoUrl);
+
+    // Audio input
+    const audioInputOpts = getFfmpegInputOptions(audioHeaders);
+    ffmpegArgs.push(...audioInputOpts);
+    ffmpegArgs.push('-i', audioUrl);
+
+    // Output settings
+    ffmpegArgs.push(
       '-c:v', 'copy',
       '-c:a', 'aac',
       '-map', '0:v:0',
@@ -244,7 +299,9 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
       '-movflags', 'faststart',
       '-y',
       filePath
-    ], { env: spawnEnv }) as any;
+    );
+
+    const ffmpegProcess = spawn(activeFfmpegPath, ffmpegArgs, { env: spawnEnv }) as any;
 
     let ffmpegStderr = '';
     ffmpegProcess.stderr?.on('data', (chunk: Buffer) => {

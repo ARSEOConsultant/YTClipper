@@ -1,5 +1,6 @@
 import { ytdl, getYtdlOptions } from './ytdlAgent';
 import { getVideoInfoViaYtdlp, getStickyProxyUrl, writeCookieFile } from './ytdlpService';
+import { getDownloadUrlViaCloudflare } from './cloudflareProxyService';
 
 // @ts-ignore
 import ffmpegPath from 'ffmpeg-static';
@@ -164,6 +165,100 @@ function getFfmpegInputOptions(httpHeaders?: Record<string, string>): string[] {
 }
 
 /**
+ * Determine if we should use proxy for this download
+ * Strategy: Try without proxy first, use proxy only if free attempt fails
+ */
+function shouldUseProxyForDownload(useCount: number): boolean {
+  // First 2 attempts without proxy
+  if (useCount < 2) return false;
+  // After 2 failures, use proxy
+  return true;
+}
+
+/**
+ * Attempt download via yt-dlp with optional proxy
+ */
+async function attemptYtdlpDownload(
+  url: string,
+  videoItag: number,
+  audioItag: number,
+  filePath: string,
+  ffmpegPath: string,
+  cookieFile: string,
+  useProxy: boolean,
+  proxyUrl?: string
+): Promise<{ success: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    const args = [
+      '-m', 'yt_dlp',
+      '--ffmpeg-location', ffmpegPath,
+      '--no-warnings',
+      '--quiet',
+      '--retries', '10',
+      '--fragment-retries', '10',
+    ];
+
+    if (cookieFile) args.push('--cookies', cookieFile);
+    if (useProxy && proxyUrl) args.push('--proxy', proxyUrl);
+
+    args.push(
+      '-f', `${videoItag}+${audioItag}`,
+      '--merge-output-format', 'mp4',
+      '-o', filePath,
+      url
+    );
+
+    const spawnEnv = { ...process.env };
+    const extraPaths = [
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      path.join(os.homedir(), '.local/bin'),
+    ].filter(fs.existsSync);
+    if (extraPaths.length > 0) {
+      spawnEnv.PATH = `${extraPaths.join(':')}:${process.env.PATH || ''}`;
+    }
+
+    const proc = spawn('python3', args, { env: spawnEnv, timeout: 300000 });
+    let stderr = '';
+
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on('close', (code: number | null) => {
+      if (code === 0) {
+        resolve({ success: true });
+      } else {
+        resolve({
+          success: false,
+          error: `yt-dlp exited with code ${code}: ${stderr.trim().slice(0, 200)}`
+        });
+      }
+    });
+
+    proc.on('error', (err: Error) => {
+      resolve({ success: false, error: err.message });
+    });
+  });
+}
+
+/**
+ * Schedule file cleanup after download
+ */
+function scheduleFileCleanup(filePath: string): void {
+  setTimeout(() => {
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`[MEDIA] Cleaned up file: ${filePath}`);
+      } catch (e) {
+        console.error(`[MEDIA] Failed to clean up ${filePath}:`, e);
+      }
+    }
+  }, 15 * 60 * 1000); // 15 minutes
+}
+
+/**
  * Spawns an FFmpeg process to merge the video and audio streams into a temporary file.
  */
 export async function processMediaJob(jobId: string, url: string, videoItag: number, audioItag: number, filename: string): Promise<void> {
@@ -184,6 +279,23 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     const proxySessionId = ytdlpInfo?.proxySessionId;
     const proxyToUse = proxySessionId ? getStickyProxyUrl(proxySessionId) : process.env.YOUTUBE_PROXY;
 
+    // ── Cost optimization: Try without proxy first (free attempt) ──
+    let useProxy = false;
+    const freeAttempt = await attemptYtdlpDownload(
+      url, videoItag, audioItag, filePath, activeFfmpegPath, cookieFile, false
+    );
+
+    if (freeAttempt.success) {
+      console.log(`[MEDIA] Job ${jobId} completed via FREE method (no proxy). Cost savings: ~£0.12`);
+      updateJob(jobId, { status: 'completed', filePath, filename });
+      scheduleFileCleanup(filePath);
+      return;
+    }
+
+    // Free attempt failed, fall back to proxy
+    console.log(`[MEDIA] Free attempt failed for job ${jobId}. Using proxy fallback...`);
+    useProxy = true;
+
     const args = [
       '-m', 'yt_dlp',
       '--ffmpeg-location', activeFfmpegPath,
@@ -196,8 +308,9 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     if (cookieFile) {
       args.push('--cookies', cookieFile);
     }
-    if (proxyToUse) {
+    if (useProxy && proxyToUse) {
       args.push('--proxy', proxyToUse);
+      console.log(`[MEDIA] Job ${jobId} using proxy (fallback). Cost: ~£0.12`);
     }
 
     if (videoItag === 9000) {
@@ -240,14 +353,9 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
 
     proc.on('close', (code: number | null) => {
       if (code === 0) {
-        console.log(`[MEDIA] Job ${jobId} completed successfully.`);
+        console.log(`[MEDIA] Job ${jobId} completed successfully (proxy fallback).`);
         updateJob(jobId, { status: 'completed', filePath, filename });
-        // Auto-delete file after 15 minutes to save disk space
-        setTimeout(() => {
-          if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-          }
-        }, 15 * 60 * 1000);
+        scheduleFileCleanup(filePath);
       } else {
         const errorMsg = `yt-dlp downloader exited with code ${code}. Stderr: ${stderr.trim()}`;
         console.error(`[MEDIA] Job ${jobId} error: ${errorMsg}`);

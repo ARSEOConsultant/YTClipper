@@ -23,7 +23,6 @@ export async function getDownloadUrlViaCloudflare(
 
         const response = await fetch(cloudflareUrl.toString(), {
             method: 'GET',
-            timeout: 15000,
         });
 
         if (!response.ok) {

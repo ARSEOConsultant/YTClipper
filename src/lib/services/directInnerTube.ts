@@ -11,7 +11,14 @@
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
 const proxyUrl = process.env.YOUTUBE_PROXY;
-const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+let dispatcher: InstanceType<typeof ProxyAgent> | undefined;
+if (proxyUrl) {
+  try {
+    dispatcher = new ProxyAgent(proxyUrl.trim());
+  } catch (e: any) {
+    console.error('[directInnerTube] Invalid YOUTUBE_PROXY value, ignoring proxy:', e.message);
+  }
+}
 const activeFetch = dispatcher ? undiciFetch : fetch;
 
 // @ts-ignore

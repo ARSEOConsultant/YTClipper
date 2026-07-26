@@ -169,20 +169,31 @@ export async function getDownloadUrlsViaYtdlp(url: string): Promise<YtdlpDownloa
     }));
 }
 
-// Run once per process on startup — keeps yt-dlp current without blocking requests
+// Run once per process on startup — keeps yt-dlp current without blocking requests.
+// Deliberately NOT routed through YOUTUBE_PROXY: that proxy exists to get past
+// YouTube's bot detection, PyPI has no such restriction, and proxying pip here
+// only adds a failure point. Output is captured (not ignored) so a broken
+// upgrade is visible in logs instead of silently leaving yt-dlp stale.
 if (typeof window === 'undefined') {
-  const spawnEnv = { ...process.env };
-  const rawProxy = getRawProxyUrl();
-  if (rawProxy) {
-    spawnEnv.HTTP_PROXY = rawProxy;
-    spawnEnv.HTTPS_PROXY = rawProxy;
-  }
-  const upgradeProc = spawn('python3', ['-m', 'pip', 'install', '--upgrade', '--quiet', 'yt-dlp'], {
-    detached: true,
-    stdio: 'ignore',
-    env: spawnEnv,
+  const upgradeProc = spawn('python3', ['-m', 'pip', 'install', '--upgrade', 'yt-dlp'], {
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  upgradeProc.unref();
+  let upgradeOut = '';
+  upgradeProc.stdout?.on('data', (d: Buffer) => { upgradeOut += d.toString(); });
+  upgradeProc.stderr?.on('data', (d: Buffer) => { upgradeOut += d.toString(); });
+  upgradeProc.on('close', (code: number | null) => {
+    console.log(`[yt-dlp self-upgrade] exited with code ${code}`);
+    console.log(`[yt-dlp self-upgrade] output: ${upgradeOut.trim().slice(-500)}`);
+    const versionProc = spawn('python3', ['-m', 'yt_dlp', '--version']);
+    let version = '';
+    versionProc.stdout?.on('data', (d: Buffer) => { version += d.toString(); });
+    versionProc.on('close', () => {
+      console.log(`[yt-dlp self-upgrade] active version: ${version.trim()}`);
+    });
+  });
+  upgradeProc.on('error', (err: Error) => {
+    console.error('[yt-dlp self-upgrade] spawn error:', err.message);
+  });
 
   // Clean up orphaned tmp files left by previous crashed sessions
   try {

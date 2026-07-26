@@ -1,9 +1,12 @@
 import ToolLandingPageTemplate from '@/components/ToolLandingPageTemplate';
 import type { Metadata } from 'next';
 
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+
 export const metadata: Metadata = {
   title: 'YouTube to MP4 Downloader | Fast, Free Video Downloads, No Signup',
   description: 'Download YouTube videos as MP4 instantly. No login, no ads, no waiting on processing. Works on any device.',
+  alternates: { canonical: `${SITE_URL}/youtube-to-mp4` },
 };
 
 const reasons = [

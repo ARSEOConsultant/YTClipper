@@ -1,6 +1,9 @@
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+
 export const metadata = {
   title: 'Terms of Service - YTClipper',
   description: 'Terms of Service for YTClipper.',
+  alternates: { canonical: `${SITE_URL}/terms` },
 };
 
 export default function TermsPage() {

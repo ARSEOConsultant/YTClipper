@@ -1,6 +1,9 @@
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+
 export const metadata = {
   title: 'How to Use YTClipper',
   description: 'Learn how to use YTClipper to download YouTube videos, extract MP3s, and download transcripts.',
+  alternates: { canonical: `${SITE_URL}/how-to-use` },
 };
 
 export default function HowToUsePage() {

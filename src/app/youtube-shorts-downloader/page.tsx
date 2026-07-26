@@ -1,9 +1,12 @@
 import ToolLandingPageTemplate from '@/components/ToolLandingPageTemplate';
 import type { Metadata } from 'next';
 
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+
 export const metadata: Metadata = {
   title: 'YouTube Shorts Downloader | Save as MP4 or Extract MP3 Audio | No Watermarks',
   description: 'Download YouTube Shorts in full 1080p quality as MP4 or extract audio-only as MP3. No watermarks, no signup required.',
+  alternates: { canonical: `${SITE_URL}/youtube-shorts-downloader` },
 };
 
 const chooseFormat = {

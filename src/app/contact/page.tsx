@@ -1,6 +1,9 @@
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+
 export const metadata = {
   title: 'Contact Us - YTClipper',
   description: 'Get in touch with the YTClipper team.',
+  alternates: { canonical: `${SITE_URL}/contact` },
 };
 
 export default function ContactPage() {

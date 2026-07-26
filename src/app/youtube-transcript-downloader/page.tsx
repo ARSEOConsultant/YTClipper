@@ -1,9 +1,12 @@
 import ToolLandingPageTemplate from '@/components/ToolLandingPageTemplate';
 import type { Metadata } from 'next';
 
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+
 export const metadata: Metadata = {
   title: 'YouTube Transcript Downloader | Extract Captions & Subtitles to TXT | Free',
   description: 'Download YouTube video transcripts as searchable text files with timestamps. No signup. Works with captions, subtitles, and auto-generated text. Not available for Shorts.',
+  alternates: { canonical: `${SITE_URL}/youtube-transcript-downloader` },
 };
 
 const reasons = [

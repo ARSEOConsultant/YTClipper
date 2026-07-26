@@ -11,6 +11,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com'),
   title: 'YouTube Downloader - Free MP4, MP3 & Transcript Extractor',
   description: 'Download YouTube videos as MP4, extract MP3 audio, or save transcripts instantly. Free, no account needed, no signup required. Works with any YouTube video.',
 };

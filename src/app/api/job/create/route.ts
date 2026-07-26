@@ -41,11 +41,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // Direct download (audio only or pre-merged SD formats)
-    const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&itag=${itag}`;
-
+    // Direct download (audio only or pre-merged SD formats).
+    // Hand the browser the raw googlevideo.com CDN URL so it downloads
+    // straight from Google — no proxy or server bandwidth spent on the
+    // actual file bytes, only on resolving the URL above.
     return NextResponse.json({
-      downloadUrl,
+      downloadUrl: result.downloadUrl,
       filename: result.filename,
       requiresJob: false
     });

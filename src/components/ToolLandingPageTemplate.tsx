@@ -353,7 +353,7 @@ export default function ToolLandingPageTemplate({
                 <p className="text-zinc-400 text-xs mt-8 italic">*Typical download: under 2 minutes for a standard-length video.</p>
               )}
               {path === '/youtube-to-mp4' && (
-                <p className="text-zinc-400 text-xs mt-8 italic">*Typical download time: under 2 minutes for a 10-minute video at 1080p on standard broadband.</p>
+                <p className="text-zinc-400 text-xs mt-8 italic">*Typical download: under 30 seconds for a 10-minute video at 360p.</p>
               )}
               {path === '/youtube-to-mp3' && (
                 <p className="text-zinc-400 text-xs mt-8 italic">*Typical conversion time: under 30 seconds.</p>

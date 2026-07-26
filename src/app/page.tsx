@@ -2,14 +2,14 @@ import ToolLandingPageTemplate from '@/components/ToolLandingPageTemplate';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'YouTube Downloader | Free HD Video, MP3, Shorts & Transcripts | No Signup',
-  description: 'Download YouTube videos up to 1080p HD, convert audio to MP3, save Shorts, and extract transcripts. Free, no login, no ads. Works on any device.',
+  title: 'YouTube Downloader | Free MP4 & MP3, Shorts & Transcripts | No Signup',
+  description: 'Download YouTube videos as MP4, convert audio to MP3, save Shorts, and extract transcripts. Free, no login, no ads. Fast and reliable on any device.',
 };
 
 const reasons = [
   {
-    title: "True HD Quality",
-    description: "We merge video and audio at their highest bitrates. You get crisp 1080p with perfectly synced sound. Most competitors max out at 360p or drop audio entirely on HD."
+    title: "Fast & Reliable, Every Time",
+    description: "No merging, no processing delays, no failed downloads from overloaded servers. Paste a link and your file is ready in seconds."
   },
   {
     title: "Works Without Internet",
@@ -17,14 +17,14 @@ const reasons = [
   },
   {
     title: "Zero Friction",
-    description: "Paste a link. Pick your quality. Download. No login, no email confirmation, no premium upsell. Takes 30 seconds."
+    description: "Paste a link. Pick MP4 or MP3. Download. No login, no email confirmation, no premium upsell. Takes 30 seconds."
   }
 ];
 
 const howItWorks = [
   "Paste your YouTube URL — Any video, any channel.",
-  "Choose your quality — 360p, 480p, 720p, or 1080p Full HD.",
-  "Download your MP4 — Instant playback starts as it downloads."
+  "Choose MP4 or MP3 — Video download or audio-only.",
+  "Download instantly — Your file starts right away, no waiting on processing."
 ];
 
 const perfectFor = [
@@ -42,7 +42,7 @@ const perfectFor = [
   },
   {
     title: "Video Editors & Filmmakers",
-    description: "Source royalty-free footage from public domain and creative commons YouTube channels. Download in full quality for professional projects."
+    description: "Source royalty-free footage from public domain and creative commons YouTube channels for reference or quick edits."
   },
   {
     title: "Archivists & Researchers",
@@ -80,7 +80,7 @@ const faqs = [
   },
   {
     question: "What quality options do I get?",
-    answer: "360p, 480p, 720p, and 1080p Full HD. Higher quality means larger file and longer download. Pick what works for your device."
+    answer: "MP4 video at 360p, or audio extracted as MP3. We keep it to formats that download instantly and reliably every time — no processing delays."
   },
   {
     question: "Will you sell my data?",
@@ -100,8 +100,8 @@ const finalCta = {
 export default function Home() {
   return (
     <ToolLandingPageTemplate
-      h1="Download YouTube videos in Full HD. No signup. No compromise on quality."
-      subheading="Get up to 1080p MP4 files with perfect audio sync. Works offline. Works everywhere."
+      h1="Download YouTube videos as MP4 or MP3. No signup. No waiting."
+      subheading="Paste a link, get your file instantly. Fast, reliable downloads that work every time."
       path="/"
       faqs={faqs}
       reasons={reasons}

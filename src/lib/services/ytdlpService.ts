@@ -138,6 +138,7 @@ export interface YtdlpInfo {
   formats: YtdlpFormat[];
   http_headers?: Record<string, string>;
   proxySessionId?: string;
+  usedProxy?: boolean;
 }
 
 export interface YtdlpDownloadFormat {
@@ -254,6 +255,7 @@ export async function getVideoInfoViaYtdlp(url: string, forceSessionId?: string)
         try {
           const data = JSON.parse(stdout.trim()) as YtdlpInfo;
           data.proxySessionId = sessionId;
+          data.usedProxy = useProxy && !!proxyToUse;
           resolve(data);
         } catch (e: any) {
           console.error('[yt-dlp] JSON parse error on stdout:', e.message, 'Stdout preview:', stdout.slice(0, 200));

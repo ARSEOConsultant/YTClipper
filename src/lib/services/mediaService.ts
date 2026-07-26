@@ -15,7 +15,7 @@ import os from 'os';
 /**
  * Gets the direct download URL or dynamic streaming URL for a specific YouTube video format.
  */
-export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ downloadUrl: string; filename: string; requiresJob?: boolean; videoItag?: number; audioItag?: number }> {
+export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ downloadUrl: string; filename: string; requiresJob?: boolean; videoItag?: number; audioItag?: number; usedProxy?: boolean; proxySessionId?: string }> {
   // ── Special case: MP3 conversion (virtual itag 9000) ──
   if (itag === 9000) {
     const ytdlpInfo = await getVideoInfoViaYtdlp(url);
@@ -68,6 +68,12 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
         return {
           downloadUrl: format.url || '',
           filename: `ytclipper_${safeTitle}_${typeLabel}.${ext}`,
+          // The resolved googlevideo.com URL is IP-locked to whichever
+          // connection (proxy or direct) fetched it. The caller must reuse
+          // the same proxy session when fetching the actual file bytes,
+          // or YouTube's CDN will reject the request with 403.
+          usedProxy: ytdlpInfo.usedProxy,
+          proxySessionId: ytdlpInfo.proxySessionId,
         };
       }
     }

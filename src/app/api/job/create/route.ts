@@ -42,11 +42,14 @@ export async function POST(req: Request) {
     }
 
     // Direct download (audio only or pre-merged SD formats).
-    // Hand the browser the raw googlevideo.com CDN URL so it downloads
-    // straight from Google — no proxy or server bandwidth spent on the
-    // actual file bytes, only on resolving the URL above.
+    // Relayed through our own server rather than handing back the raw
+    // googlevideo.com URL — that CDN URL is IP-locked to whichever
+    // server/proxy resolved it, so it fails when a different device
+    // (the user's own browser) tries to fetch it directly.
+    const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&itag=${itag}`;
+
     return NextResponse.json({
-      downloadUrl: result.downloadUrl,
+      downloadUrl,
       filename: result.filename,
       requiresJob: false
     });

@@ -121,42 +121,56 @@ function buildMetadataFromYtdlp(
     ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
     : `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-  const MAX_VIDEO_HEIGHT = 1080;
+  // Only offer 360p (itag 18) — a pre-merged progressive format that needs
+  // no video+audio merging, no ffmpeg, and no server-side processing.
+  // Downloading HD requires combining separate video-only and audio-only
+  // streams, which is far more fragile against YouTube's bot detection
+  // and drives up proxy costs — not worth it for a global, high-volume tool.
+  const MAX_VIDEO_HEIGHT = 360;
   const availableFormats: FormatOption[] = [];
 
   const formats: any[] = data.formats || [];
 
-  // De-duplicate video formats by height — prefer mp4, then highest bitrate
-  const videoMap = new Map<number, any>();
+  // Pick the single best video format at or below the height cap —
+  // prefer mp4, then highest bitrate. Only one video option is exposed.
+  // Strongly prefer progressive formats (video+audio already combined,
+  // e.g. itag 18) over video-only streams, which would silently require
+  // ffmpeg merging — exactly what capping at 360p is meant to avoid.
+  let bestProgressive: any = null;
+  let bestVideoOnly: any = null;
   for (const f of formats) {
     const height: number = f.height;
     const isVideo = f.vcodec && f.vcodec !== 'none';
+    const isAudio = f.acodec && f.acodec !== 'none';
     if (!isVideo || !height || height > MAX_VIDEO_HEIGHT) continue;
-    const existing = videoMap.get(height);
-    const preferNew = !existing
-      || (f.ext === 'mp4' && existing.ext !== 'mp4')
-      || (f.ext === existing.ext && (f.vbr || f.tbr || 0) > (existing.vbr || existing.tbr || 0));
-    if (preferNew) videoMap.set(height, f);
-  }
 
-  Array.from(videoMap.values())
-    .sort((a, b) => (b.height || 0) - (a.height || 0))
-    .forEach(f => {
-      const itag = parseInt(f.format_id, 10);
-      if (!itag || isNaN(itag)) return;
-      let qualityName = 'SD';
-      if (f.height >= 1080) qualityName = 'FHD';
-      else if (f.height >= 720) qualityName = 'HD';
-      const bytes = f.filesize || f.filesize_approx;
+    const bucket = isAudio ? 'bestProgressive' : 'bestVideoOnly';
+    const existing = bucket === 'bestProgressive' ? bestProgressive : bestVideoOnly;
+    const preferNew = !existing
+      || height > existing.height
+      || (height === existing.height && f.ext === 'mp4' && existing.ext !== 'mp4')
+      || (height === existing.height && f.ext === existing.ext && (f.vbr || f.tbr || 0) > (existing.vbr || existing.tbr || 0));
+    if (preferNew) {
+      if (bucket === 'bestProgressive') bestProgressive = f;
+      else bestVideoOnly = f;
+    }
+  }
+  const bestVideoFormat = bestProgressive || bestVideoOnly;
+
+  if (bestVideoFormat) {
+    const itag = parseInt(bestVideoFormat.format_id, 10);
+    if (itag && !isNaN(itag)) {
+      const bytes = bestVideoFormat.filesize || bestVideoFormat.filesize_approx;
       const sizeLabel = bytes ? ` — ${formatBytes(bytes)}` : '';
       availableFormats.push({
         itag,
-        label: `MP4 - (${f.height}p ${qualityName})${sizeLabel}`,
+        label: `MP4 - (${bestVideoFormat.height}p)${sizeLabel}`,
         type: 'video',
-        quality: `${f.height}p`,
+        quality: `${bestVideoFormat.height}p`,
         ...(bytes ? { fileSize: formatBytes(bytes) } : {}),
       });
-    });
+    }
+  }
 
   // Audio-only formats — deduplicate by bitrate bucket, prefer m4a
   const audioMap = new Map<number, any>();
@@ -237,35 +251,26 @@ function buildMetadata(
   // Build format options
   const availableFormats: FormatOption[] = [];
 
-  // De-duplicate video formats by height
-  const videoFormatsMap = new Map<number, any>();
+  // Only offer 360p — a single progressive (video+audio already combined)
+  // format that needs no ffmpeg merging. Same reasoning as buildMetadataFromYtdlp.
+  const MAX_VIDEO_HEIGHT = 360;
+
+  let bestVideoFormat: any = null;
   for (const f of formats) {
-    if (f.hasVideo && f.height) {
-      const existing = videoFormatsMap.get(f.height);
-      if (!existing || (f.hasAudio && !existing.hasAudio)) {
-        videoFormatsMap.set(f.height, f);
-      }
-    }
+    if (!f.hasVideo || !f.height || f.height > MAX_VIDEO_HEIGHT) continue;
+    const preferNew = !bestVideoFormat
+      || (f.hasAudio && !bestVideoFormat.hasAudio)
+      || (f.hasAudio === bestVideoFormat.hasAudio && f.height > bestVideoFormat.height);
+    if (preferNew) bestVideoFormat = f;
   }
 
-  const MAX_VIDEO_HEIGHT = 1080;
-
-  const sortedVideoFormats = Array.from(videoFormatsMap.values())
-    .sort((a: any, b: any) => (b.height || 0) - (a.height || 0));
-
-  for (const f of sortedVideoFormats) {
-    if (f.itag && f.height && f.height <= MAX_VIDEO_HEIGHT) {
-      let qualityName = 'SD';
-      if (f.height >= 1080) qualityName = 'FHD';
-      else if (f.height >= 720) qualityName = 'HD';
-
-      availableFormats.push({
-        itag: f.itag,
-        label: `MP4 - (${f.height}p ${qualityName})`,
-        type: 'video',
-        quality: `${f.height}p`,
-      });
-    }
+  if (bestVideoFormat?.itag) {
+    availableFormats.push({
+      itag: bestVideoFormat.itag,
+      label: `MP4 - (${bestVideoFormat.height}p)`,
+      type: 'video',
+      quality: `${bestVideoFormat.height}p`,
+    });
   }
 
   // Audio-only formats

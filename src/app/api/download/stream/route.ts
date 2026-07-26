@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Readable } from 'stream';
 import miniget from 'miniget';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { getVideoInfoViaYtdlp, getStickyProxyUrl } from '@/lib/services/ytdlpService';
+import { getVideoInfoViaYtdlp, getStickyProxyUrl, getRawProxyUrl } from '@/lib/services/ytdlpService';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
     }
 
     const proxySessionId = info.proxySessionId;
-    const proxyUrl = proxySessionId ? getStickyProxyUrl(proxySessionId) : process.env.YOUTUBE_PROXY;
+    const proxyUrl = proxySessionId ? getStickyProxyUrl(proxySessionId) : getRawProxyUrl();
     
     const requestHeaders = format.http_headers || info.http_headers || {};
 

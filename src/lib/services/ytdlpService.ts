@@ -72,8 +72,21 @@ export function generateSessionId(): string {
   return result;
 }
 
+/**
+ * Reads YOUTUBE_PROXY and strips any trailing garbage.
+ * Guards against the env var accidentally containing extra text
+ * (e.g. a copy-pasted curl command) which would otherwise break
+ * yt-dlp's --proxy flag and any URL parsing downstream.
+ */
+export function getRawProxyUrl(): string | undefined {
+  const raw = process.env.YOUTUBE_PROXY;
+  if (!raw) return undefined;
+  const trimmed = raw.trim().split(/\s+/)[0];
+  return trimmed || undefined;
+}
+
 export function getStickyProxyUrl(sessionId: string): string | undefined {
-  const proxyUrl = process.env.YOUTUBE_PROXY;
+  const proxyUrl = getRawProxyUrl();
   if (!proxyUrl) return undefined;
 
   if (proxyUrl.includes('iproyal.com')) {
@@ -158,9 +171,10 @@ export async function getDownloadUrlsViaYtdlp(url: string): Promise<YtdlpDownloa
 // Run once per process on startup — keeps yt-dlp current without blocking requests
 if (typeof window === 'undefined') {
   const spawnEnv = { ...process.env };
-  if (process.env.YOUTUBE_PROXY) {
-    spawnEnv.HTTP_PROXY = process.env.YOUTUBE_PROXY;
-    spawnEnv.HTTPS_PROXY = process.env.YOUTUBE_PROXY;
+  const rawProxy = getRawProxyUrl();
+  if (rawProxy) {
+    spawnEnv.HTTP_PROXY = rawProxy;
+    spawnEnv.HTTPS_PROXY = rawProxy;
   }
   const upgradeProc = spawn('python3', ['-m', 'pip', 'install', '--upgrade', '--quiet', 'yt-dlp'], {
     detached: true,

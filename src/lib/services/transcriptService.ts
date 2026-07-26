@@ -1,7 +1,7 @@
 import { YoutubeTranscript } from 'youtube-transcript';
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { getStickyProxyUrl, generateSessionId } from './ytdlpService';
+import { getStickyProxyUrl, generateSessionId, getRawProxyUrl } from './ytdlpService';
 
 function getCookieHeader(): string {
   const cookiesStr = process.env.YOUTUBE_COOKIES;
@@ -23,7 +23,7 @@ const cookieHeader = getCookieHeader();
 function customFetch(url: string, options: any = {}): Promise<any> {
   return new Promise((resolve, reject) => {
     const sessionId = generateSessionId();
-    const proxyUrl = getStickyProxyUrl(sessionId) || process.env.YOUTUBE_PROXY;
+    const proxyUrl = getStickyProxyUrl(sessionId) || getRawProxyUrl();
     const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined;
 
     const headers = { ...options.headers };

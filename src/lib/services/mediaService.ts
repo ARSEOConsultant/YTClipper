@@ -1,5 +1,5 @@
 import { ytdl, getYtdlOptions } from './ytdlAgent';
-import { getVideoInfoViaYtdlp, getStickyProxyUrl, writeCookieFile } from './ytdlpService';
+import { getVideoInfoViaYtdlp, getStickyProxyUrl, writeCookieFile, getRawProxyUrl } from './ytdlpService';
 import { getDownloadUrlViaCloudflare } from './cloudflareProxyService';
 
 // @ts-ignore
@@ -277,7 +277,7 @@ export async function processMediaJob(jobId: string, url: string, videoItag: num
     } catch (_) {}
 
     const proxySessionId = ytdlpInfo?.proxySessionId;
-    const proxyToUse = proxySessionId ? getStickyProxyUrl(proxySessionId) : process.env.YOUTUBE_PROXY;
+    const proxyToUse = proxySessionId ? getStickyProxyUrl(proxySessionId) : getRawProxyUrl();
 
     // ── Cost optimization: Try without proxy first (free attempt) ──
     let useProxy = false;

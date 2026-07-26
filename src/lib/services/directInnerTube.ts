@@ -9,12 +9,13 @@
  */
 
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
+import { getRawProxyUrl } from './ytdlpService';
 
-const proxyUrl = process.env.YOUTUBE_PROXY;
+const proxyUrl = getRawProxyUrl();
 let dispatcher: InstanceType<typeof ProxyAgent> | undefined;
 if (proxyUrl) {
   try {
-    dispatcher = new ProxyAgent(proxyUrl.trim());
+    dispatcher = new ProxyAgent(proxyUrl);
   } catch (e: any) {
     console.error('[directInnerTube] Invalid YOUTUBE_PROXY value, ignoring proxy:', e.message);
   }

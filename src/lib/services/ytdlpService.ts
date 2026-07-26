@@ -92,10 +92,18 @@ export function getStickyProxyUrl(sessionId: string): string | undefined {
   if (proxyUrl.includes('iproyal.com')) {
     try {
       const url = new URL(proxyUrl);
-      // Only append sticky session parameters if using the default rotating port (12321).
-      // If the user has configured a custom sticky port (e.g. 10001-14999), do not modify the password.
-      if (url.port === '12321' && !url.password.includes('_session-')) {
-        url.password = `${url.password}_session-${sessionId}_lifetime-10m`;
+      // Always strip any session suffix already baked into the password
+      // (e.g. from a one-time manual paste into the Render dashboard) and
+      // replace it with a fresh one for this call. Without this, a fixed
+      // session ID embedded in the env var permanently pins every request
+      // to a single exit IP — defeating rotation entirely, and meaning a
+      // single flagged/blocked IP takes down every proxy-routed request.
+      // Only applies on the default rotating port (12321); a custom sticky
+      // port (10001-14999) is left untouched since that's a deliberate
+      // fixed-session setup.
+      if (url.port === '12321') {
+        const basePassword = url.password.replace(/_session-[^_]*(_lifetime-\d+m)?$/, '');
+        url.password = `${basePassword}_session-${sessionId}_lifetime-10m`;
       }
       const result = url.toString();
       // Remove trailing slash to prevent python/yt-dlp parsing failures

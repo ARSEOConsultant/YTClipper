@@ -123,8 +123,8 @@ const finalCta = {
 export default function YouTubeShortsDownloaderPage() {
   return (
     <ToolLandingPageTemplate
-      h1="Save YouTube Shorts as video or audio. Your choice. Your device."
-      subheading="Download full-resolution vertical MP4 or extract audio-only as MP3. No watermarks. No quality loss."
+      h1="Download YouTube Shorts"
+      subheading="Save viral YouTube Shorts directly to your device effortlessly in high definition or extract audio-only as MP3. Never lose track of your favorite bite-sized videos and watch them whenever you want. No watermarks, No Quality loss."
       path="/youtube-shorts-downloader"
       faqs={faqs}
       reasons={reasons}

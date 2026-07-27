@@ -103,8 +103,8 @@ const finalCta = {
 export default function Home() {
   return (
     <ToolLandingPageTemplate
-      h1="Download YouTube videos as MP4 or MP3. No signup. No waiting."
-      subheading="Paste a link, get your file instantly. Fast, reliable downloads that work every time."
+      h1="Free YouTube Video Downloader"
+      subheading="Save your favorite YouTube videos in high quality instantly with our fast, free, and secure online downloader. No registration or software installation required. Just paste URL and download!"
       path="/"
       faqs={faqs}
       reasons={reasons}

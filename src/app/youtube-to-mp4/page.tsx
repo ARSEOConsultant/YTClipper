@@ -88,8 +88,8 @@ const finalCta = {
 export default function YouTubeToMp4Page() {
   return (
     <ToolLandingPageTemplate
-      h1="Download YouTube videos as MP4. Fast, free, no signup."
-      subheading="No merging, no processing delays. Paste a link and your file is ready in seconds."
+      h1="Download YouTube videos as MP4"
+      subheading="Convert and download any YouTube video into crystal-clear MP4 format with just a single click. Enjoy seamless playback on your phone, tablet, or computer offline anytime."
       path="/youtube-to-mp4"
       faqs={faqs}
       reasons={reasons}

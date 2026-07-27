@@ -126,8 +126,8 @@ const finalCta = {
 export default function YouTubeToMp3Page() {
   return (
     <ToolLandingPageTemplate
-      h1="Extract audio from YouTube. Choose your format. Download in seconds."
-      subheading="MP3, M4A, or WebM — pick what works for your device. No signup, no quality loss."
+      h1="Extract audio from YouTube videos"
+      subheading="Turn your favorite YouTube clips into high-quality MP3, M4A, or WebM audio files in seconds, pick what works for your device. Perfect for building your offline music library or saving podcasts on the go."
       path="/youtube-to-mp3"
       faqs={faqs}
       reasons={reasons}

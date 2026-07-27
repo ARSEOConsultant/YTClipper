@@ -123,8 +123,8 @@ const finalCta = {
 export default function YouTubeTranscriptDownloaderPage() {
   return (
     <ToolLandingPageTemplate
-      h1="Download YouTube transcripts in seconds. Read instead of watching."
-      subheading="Extract captions, subtitles, or auto-generated text as clean, searchable files with timestamps. Works on full-length videos only — not Shorts."
+      h1="Download YouTube Video Transcripts"
+      subheading="Easily extract captions, subtitles, or auto-generated text as clean, searchable files with timestamps. Great for research, content creation, note-taking, and translation. Works on full-length videos only, not Shorts."
       path="/youtube-transcript-downloader"
       faqs={faqs}
       reasons={reasons}

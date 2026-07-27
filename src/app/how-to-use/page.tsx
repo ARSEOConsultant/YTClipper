@@ -1,15 +1,15 @@
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ufetchtube.com';
 
 export const metadata = {
-  title: 'How to Use YTClipper',
-  description: 'Learn how to use YTClipper to download YouTube videos, extract MP3s, and download transcripts.',
+  title: 'How to Use UFetchTube',
+  description: 'Learn how to use UFetchTube to download YouTube videos, extract MP3s, and download transcripts.',
   alternates: { canonical: `${SITE_URL}/how-to-use` },
 };
 
 export default function HowToUsePage() {
   return (
     <div className="max-w-3xl mx-auto py-16 px-4 prose prose-zinc">
-      <h1 className="text-3xl font-bold tracking-tight mb-8">How to Use YTClipper</h1>
+      <h1 className="text-3xl font-bold tracking-tight mb-8">How to Use UFetchTube</h1>
       
       <div className="space-y-8 text-zinc-600 leading-relaxed">
         <section>
@@ -19,7 +19,7 @@ export default function HowToUsePage() {
 
         <section>
           <h2 className="text-xl font-semibold text-zinc-900 mb-3">2. Paste the Link</h2>
-          <p>Return to YTClipper and paste the link into the large input box on the homepage. Click the &quot;Download&quot; button.</p>
+          <p>Return to UFetchTube and paste the link into the large input box on the homepage. Click the &quot;Download&quot; button.</p>
         </section>
 
         <section>

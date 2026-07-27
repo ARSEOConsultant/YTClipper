@@ -1,7 +1,7 @@
 import ToolLandingPageTemplate from '@/components/ToolLandingPageTemplate';
 import type { Metadata } from 'next';
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ufetchtube.com';
 
 export const metadata: Metadata = {
   title: 'YouTube to MP3 Converter | MP3, M4A, WebM Audio Download | Free, No Signup',

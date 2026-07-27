@@ -28,7 +28,7 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
     const safeTitle = (ytdlpInfo.title || 'audio').replace(/[^a-z0-9]/gi, '_').toLowerCase();
     return {
       downloadUrl: '',
-      filename: `ytclipper_${safeTitle}.mp3`,
+      filename: `ufetchtube_${safeTitle}.mp3`,
       requiresJob: true,
       videoItag: 9000,
       audioItag: parseInt(bestAudio.format_id, 10),
@@ -55,7 +55,7 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
           if (!audioFormat) throw new Error('No audio format found.');
           return {
             downloadUrl: '',
-            filename: `ytclipper_${safeTitle}_${format.height || itag}p.mp4`,
+            filename: `ufetchtube_${safeTitle}_${format.height || itag}p.mp4`,
             requiresJob: true,
             videoItag: itag,
             audioItag: parseInt(audioFormat.format_id, 10),
@@ -67,7 +67,7 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
         const typeLabel = isAudioOnly ? 'audio' : 'video';
         return {
           downloadUrl: format.url || '',
-          filename: `ytclipper_${safeTitle}_${typeLabel}.${ext}`,
+          filename: `ufetchtube_${safeTitle}_${typeLabel}.${ext}`,
           // The resolved googlevideo.com URL is IP-locked to whichever
           // connection (proxy or direct) fetched it. The caller must reuse
           // the same proxy session when fetching the actual file bytes,
@@ -98,7 +98,7 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
       if (!audioFormat) throw new Error('No audio format found.');
       return {
         downloadUrl: '',
-        filename: `ytclipper_${safeTitle}_${format.height}p.mp4`,
+        filename: `ufetchtube_${safeTitle}_${format.height}p.mp4`,
         requiresJob: true,
         videoItag: itag,
         audioItag: audioFormat.itag,
@@ -110,7 +110,7 @@ export async function getMediaDownloadUrl(url: string, itag: number): Promise<{ 
     if (isAudioOnly && format.container === 'mp4') ext = 'm4a';
     return {
       downloadUrl: format.url || '',
-      filename: `ytclipper_${safeTitle}_${isAudioOnly ? 'audio' : 'video'}.${ext}`,
+      filename: `ufetchtube_${safeTitle}_${isAudioOnly ? 'audio' : 'video'}.${ext}`,
     };
   } catch (error: any) {
     console.error('[MEDIA] Both download sources failed:', error.message);

@@ -11,7 +11,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://ufetchtube.com'),
   title: 'YouTube Downloader - Free MP4, MP3 & Transcript Extractor',
   description: 'Download YouTube videos as MP4, extract MP3 audio, or save transcripts instantly. Free, no account needed, no signup required. Works with any YouTube video.',
 };
@@ -29,9 +29,9 @@ export default function RootLayout({
             <div className="flex items-center gap-4">
               <Link href="/" className="font-bold text-xl tracking-tight text-primary flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center font-black">
-                  YT
+                  UF
                 </div>
-                YTClipper
+                UFetchTube
               </Link>
               <span className="hidden lg:inline text-xs font-normal text-zinc-400 border-l border-zinc-200 pl-3">
                 Download what you own. Respect what you borrow.
@@ -55,7 +55,7 @@ export default function RootLayout({
           <div className="container mx-auto px-4 max-w-5xl">
             {/* Trust Statement */}
             <div className="mb-8 pb-8 border-b border-zinc-200/60">
-              <h4 className="font-semibold text-zinc-800 text-sm mb-4">YTClipper respects your privacy and creators&apos; rights</h4>
+              <h4 className="font-semibold text-zinc-800 text-sm mb-4">UFetchTube respects your privacy and creators&apos; rights</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-xs text-zinc-500">
                 <div>
                   <h5 className="font-bold text-zinc-700 mb-1">No signup.</h5>
@@ -84,7 +84,7 @@ export default function RootLayout({
                 <Link href="/terms" className="hover:text-zinc-900">Terms of Service</Link>
                 <Link href="/contact" className="hover:text-zinc-900">Contact</Link>
               </div>
-              <div>&copy; {new Date().getFullYear()} YTClipper. All rights reserved.</div>
+              <div>&copy; {new Date().getFullYear()} UFetchTube. All rights reserved.</div>
             </div>
           </div>
         </footer>

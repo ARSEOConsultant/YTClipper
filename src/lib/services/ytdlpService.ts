@@ -3,7 +3,7 @@ import { writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 
-const COOKIE_FILE = path.join(tmpdir(), 'ytclipper-yt-cookies.txt');
+const COOKIE_FILE = path.join(tmpdir(), 'ufetchtube-yt-cookies.txt');
 let cookieFileWritten = false;
 
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes

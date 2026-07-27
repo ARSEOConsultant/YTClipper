@@ -1,8 +1,8 @@
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ytclipper.com';
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://ufetchtube.com';
 
 export const metadata = {
-  title: 'Contact Us - YTClipper',
-  description: 'Get in touch with the YTClipper team.',
+  title: 'Contact Us - UFetchTube',
+  description: 'Get in touch with the UFetchTube team.',
   alternates: { canonical: `${SITE_URL}/contact` },
 };
 
@@ -17,8 +17,8 @@ export default function ContactPage() {
         <div className="bg-zinc-50 p-6 rounded-xl border border-zinc-100">
           <h2 className="text-xl font-semibold text-zinc-900 mb-2 mt-0">Email Us</h2>
           <p className="mb-0">You can contact our support team at: <br/>
-            <a href="mailto:support@ytclipper.example.com" className="text-primary font-medium hover:underline">
-              support@ytclipper.example.com
+            <a href="mailto:support@ufetchtube.example.com" className="text-primary font-medium hover:underline">
+              support@ufetchtube.example.com
             </a>
           </p>
         </div>

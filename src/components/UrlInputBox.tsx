@@ -5,14 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ClipboardPaste, Search, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import TurnstileWidget from '@/components/TurnstileWidget';
 
 interface UrlInputBoxProps {
-  onSubmit: (url: string) => void;
+  onSubmit: (url: string, turnstileToken: string | null) => void;
   isLoading: boolean;
 }
 
 export default function UrlInputBox({ onSubmit, isLoading }: UrlInputBoxProps) {
   const [url, setUrl] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileEnabled = !!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   const handlePaste = async () => {
     try {
@@ -30,7 +33,11 @@ export default function UrlInputBox({ onSubmit, isLoading }: UrlInputBoxProps) {
       toast.error('Please enter a YouTube URL');
       return;
     }
-    onSubmit(url.trim());
+    if (turnstileEnabled && !turnstileToken) {
+      toast.error('Please complete the verification check');
+      return;
+    }
+    onSubmit(url.trim(), turnstileToken);
   };
 
   return (
@@ -75,7 +82,7 @@ export default function UrlInputBox({ onSubmit, isLoading }: UrlInputBoxProps) {
             type="submit"
             size="lg"
             className="rounded-full px-8 bg-black hover:bg-zinc-800 text-white font-medium text-base h-12"
-            disabled={isLoading || !url}
+            disabled={isLoading || !url || (turnstileEnabled && !turnstileToken)}
           >
             {isLoading ? (
               <>
@@ -88,6 +95,7 @@ export default function UrlInputBox({ onSubmit, isLoading }: UrlInputBoxProps) {
           </Button>
         </div>
       </div>
+      {turnstileEnabled && <TurnstileWidget onToken={setTurnstileToken} />}
     </form>
   );
 }

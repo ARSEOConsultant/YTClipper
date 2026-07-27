@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { parseYouTubeUrl } from '@/lib/services/youtubeService';
 import { checkIpLimit } from '@/lib/services/rateLimitService';
+import { verifyTurnstileToken } from '@/lib/services/turnstileService';
 
 export async function POST(request: Request) {
   console.log('[VALIDATE-URL] POST request received');
@@ -17,10 +18,17 @@ export async function POST(request: Request) {
     }
 
     console.log('[VALIDATE-URL] Reading request body...');
-    const { url } = await request.json();
+    const { url, turnstileToken } = await request.json();
     if (!url) {
       console.log('[VALIDATE-URL] No URL provided');
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    }
+
+    const clientIp = ip.split(',')[0].trim();
+    const humanVerified = await verifyTurnstileToken(turnstileToken, clientIp);
+    if (!humanVerified) {
+      console.log('[VALIDATE-URL] Turnstile verification failed');
+      return NextResponse.json({ error: 'Verification failed. Please try again.' }, { status: 403 });
     }
 
     console.log('[VALIDATE-URL] Parsing URL:', url);

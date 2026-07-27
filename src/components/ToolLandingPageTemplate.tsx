@@ -87,17 +87,17 @@ export default function ToolLandingPageTemplate({
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState('');
 
-  const handleUrlSubmit = async (submittedUrl: string) => {
+  const handleUrlSubmit = async (submittedUrl: string, turnstileToken: string | null) => {
     setUrl(submittedUrl);
     setMetadata(null);
     setIsLoadingMetadata(true);
 
     try {
-      // Validate
+      // Validate (also verifies the Turnstile token server-side, if configured)
       const valRes = await fetch('/api/validate-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: submittedUrl }),
+        body: JSON.stringify({ url: submittedUrl, turnstileToken }),
       });
       if (!valRes.ok) throw new Error((await valRes.json()).error || 'Invalid URL');
 

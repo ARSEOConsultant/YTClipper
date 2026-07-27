@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { CheckCircle2 } from 'lucide-react';
 import UrlInputBox from '@/components/UrlInputBox';
 import VideoPreviewCard from '@/components/VideoPreviewCard';
 import FormatOptions from '@/components/FormatOptions';
@@ -253,6 +254,19 @@ export default function ToolLandingPageTemplate({
 
             <div className="mt-12">
               <UrlInputBox onSubmit={handleUrlSubmit} isLoading={isLoadingMetadata} />
+
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+                {['100% Free', 'No Sign Up', 'Fast and Secure Processing'].map((label) => (
+                  <div
+                    key={label}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full border border-zinc-200 bg-white shadow-sm"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                    <span className="text-sm font-semibold text-zinc-900">{label}</span>
+                  </div>
+                ))}
+              </div>
+
               <ComplianceNotice notice={getComplianceNotice()} />
             </div>
 
